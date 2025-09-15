@@ -41,6 +41,7 @@ export default function AuthForm() {
         const avatarUrl = `https://api.dicebear.com/6.x/adventurer-neutral/svg?seed=${fName}+${lName}`;
 
         await setDoc(doc(db, "users", user.uid), {
+          uid: user.uid,
           firstName: fName,
           lastName: lName,
           email: user.email,
@@ -87,6 +88,7 @@ export default function AuthForm() {
           `https://api.dicebear.com/6.x/adventurer-neutral/svg?seed=${names[0]}+${names[1]}`;
 
         await setDoc(userRef, {
+          uid:user.uid,
           firstName: names[0],
           lastName: names[1],
           email: user.email,

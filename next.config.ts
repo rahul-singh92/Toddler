@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   images: {
-    domains: ['api.dicebear.com'], // ✅ corrected
+    domains: ['lh3.googleusercontent.com','api.dicebear.com'], // ✅ corrected
   },
 };
 
