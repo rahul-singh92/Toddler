@@ -19,13 +19,13 @@ export default function AuthForm() {
   const [mode, setMode] = useState<"signup" | "signin">("signup");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
+    setErrorMsg("");
 
     const email = (document.getElementById("email") as HTMLInputElement).value;
     const password = (document.getElementById("password") as HTMLInputElement).value;
@@ -33,18 +33,13 @@ export default function AuthForm() {
     const fName = mode === "signup" ? (document.getElementById("firstname") as HTMLInputElement).value : "";
     const lName = mode === "signup" ? (document.getElementById("lastname") as HTMLInputElement).value : "";
 
-    setFirstName(fName);
-    setLastName(lName);
-
     try {
       if (mode === "signup") {
         const userCred = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCred.user;
 
-        // Generate DiceBear avatar for email/password users
         const avatarUrl = `https://api.dicebear.com/6.x/adventurer-neutral/svg?seed=${fName}+${lName}`;
 
-        // Save user data to Firestore
         await setDoc(doc(db, "users", user.uid), {
           firstName: fName,
           lastName: lName,
@@ -59,8 +54,16 @@ export default function AuthForm() {
         router.push("/todo");
       }
     } catch (error: any) {
-      console.error(error);
-      alert(error.message);
+      // Friendly error messages
+      if (error.code === "auth/user-not-found") {
+        setErrorMsg("No account found. Please sign up first.");
+      } else if (error.code === "auth/wrong-password") {
+        setErrorMsg("Incorrect password. Please try again.");
+      } else if (error.code === "auth/email-already-in-use") {
+        setErrorMsg("Email is already in use.");
+      } else {
+        setErrorMsg("Something went wrong. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -68,6 +71,7 @@ export default function AuthForm() {
 
   const handleGoogleLogin = async () => {
     setLoading(true);
+    setErrorMsg("");
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
@@ -78,7 +82,6 @@ export default function AuthForm() {
       if (!userSnap.exists()) {
         const names = user.displayName?.split(" ") || ["User", ""];
 
-        // Use Google photoURL or fallback to DiceBear
         const avatarUrl =
           user.photoURL ||
           `https://api.dicebear.com/6.x/adventurer-neutral/svg?seed=${names[0]}+${names[1]}`;
@@ -95,7 +98,7 @@ export default function AuthForm() {
       router.push("/todo");
     } catch (error: any) {
       console.error("Google sign-in error:", error);
-      alert(error.message);
+      setErrorMsg("Google sign-in failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -116,7 +119,7 @@ export default function AuthForm() {
 
         {loading ? (
           <div className="flex justify-center items-center h-64">
-            <InfiniteWalkingLoader/>
+            <InfiniteWalkingLoader />
           </div>
         ) : (
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
@@ -158,6 +161,10 @@ export default function AuthForm() {
               </div>
             </LabelInputContainer>
 
+            {errorMsg && (
+              <p className="text-red-500 text-sm text-center">{errorMsg}</p>
+            )}
+
             <button
               className="group/btn relative block h-12 w-full rounded-md bg-gradient-to-br from-black to-neutral-600 font-medium text-white text-lg shadow-md dark:from-zinc-900 dark:to-zinc-800"
               type="submit"
@@ -178,14 +185,14 @@ export default function AuthForm() {
           {mode === "signup" ? (
             <>
               Already have an account?{" "}
-              <button onClick={() => setMode("signin")} className="text-indigo-600 dark:text-indigo-400 hover:underline">
+              <button onClick={() => {setMode("signin"); setErrorMsg("");}} className="text-indigo-600 dark:text-indigo-400 hover:underline">
                 Sign in
               </button>
             </>
           ) : (
             <>
               Don’t have an account?{" "}
-              <button onClick={() => setMode("signup")} className="text-indigo-600 dark:text-indigo-400 hover:underline">
+              <button onClick={() => {setMode("signup"); setErrorMsg("");}} className="text-indigo-600 dark:text-indigo-400 hover:underline">
                 Sign up
               </button>
             </>
