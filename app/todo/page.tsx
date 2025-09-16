@@ -8,6 +8,10 @@ import { onAuthStateChanged } from "firebase/auth";
 
 export default function TodoPage() {
   const [photoURL, setPhotoURL] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState({
+    thisWeek: false,
+    thisMonth: true,
+  });
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -24,7 +28,6 @@ export default function TodoPage() {
           const data = userSnap.data();
           setPhotoURL(data.photoURL || user.photoURL || null);
         } else {
-          // no Firestore record → fallback to Google photoURL
           setPhotoURL(user.photoURL || null);
         }
       } catch (error) {
@@ -39,9 +42,8 @@ export default function TodoPage() {
   return (
     <ProtectedRoute>
       <div className="flex">
-        {/* Sidebar */}
+        {/* First Sidebar */}
         <aside className="fixed left-0 top-0 h-screen w-20 bg-[#151515] flex flex-col justify-between items-center py-6">
-          {/* Top Section */}
           <div className="flex flex-col items-center space-y-6">
             <div className="mb-8">
               <Image
@@ -53,7 +55,6 @@ export default function TodoPage() {
             </div>
           </div>
 
-          {/* Bottom Section (User Profile) */}
           <div className="mb-4">
             {photoURL ? (
               <img
@@ -76,12 +77,73 @@ export default function TodoPage() {
           </div>
         </aside>
 
+        {/* Second Sidebar */}
+        <aside className="fixed left-20 top-0 h-screen w-64 bg-black p-4 flex flex-col space-y-4 overflow-y-auto">
+          <h2 className="text-white text-xl font-bold mb-4">Todos</h2>
+
+          {/* This Week Group */}
+          <div>
+            <button
+              className="text-[#C8A2D6] font-semibold w-full text-left mb-2"
+              onClick={() =>
+                setCollapsed((prev) => ({ ...prev, thisWeek: !prev.thisWeek }))
+              }
+            >
+              This Week
+            </button>
+            {!collapsed.thisWeek && (
+              <ul className="bg-[#151515] rounded p-2 space-y-2">
+                <li className="flex items-center space-x-2">
+                  <input type="checkbox" />
+                  <span className="text-white">Todo 1</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <input type="checkbox" />
+                  <span className="text-white">Todo 2</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <input type="checkbox" />
+                  <span className="text-white">Todo 3</span>
+                </li>
+              </ul>
+            )}
+          </div>
+
+          {/* This Month Group */}
+          <div>
+            <button
+              className="text-[#C8A2D6] font-semibold w-full text-left mb-2"
+              onClick={() =>
+                setCollapsed((prev) => ({ ...prev, thisMonth: !prev.thisMonth }))
+              }
+            >
+              This Month
+            </button>
+            {!collapsed.thisMonth && (
+              <ul className="bg-[#151515] rounded p-2 space-y-2">
+                <li className="flex items-center space-x-2">
+                  <input type="checkbox" />
+                  <span className="text-white">Todo A</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <input type="checkbox" />
+                  <span className="text-white">Todo B</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <input type="checkbox" />
+                  <span className="text-white">Todo C</span>
+                </li>
+              </ul>
+            )}
+          </div>
+        </aside>
+
         {/* Main Content */}
-        <main className="flex-1 ml-20 p-6">
+        <main className="flex-1 ml-[20rem] p-6">
           <h1 className="text-2xl font-bold">Your Todo App</h1>
           <p>Welcome! You are logged in.</p>
           <div className="h-[150vh] bg-gray-100 mt-6 rounded-lg p-4">
-            Scroll to see sidebar stays fixed.
+            Scroll to see sidebars stay fixed.
           </div>
         </main>
       </div>
