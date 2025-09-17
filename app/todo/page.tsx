@@ -5,7 +5,7 @@ import Image from "next/image";
 import { auth, db } from "../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { IconPlus, IconMinus } from "@tabler/icons-react";
+import { IconPlus, IconMinus, IconTerminal } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function TodoPage() {
@@ -60,8 +60,12 @@ export default function TodoPage() {
             </div>
           </div>
 
-          {/* User Profile Avatar */}
-          <div className="mb-4">
+          {/* User Profile Avatar + Collapse Icon(IconTerminal)*/}
+          <div className="flex flex-col items-center space-y-4 mb-4">
+            {/* Terminal icon button */}
+            <button className="w-10 h-10 flex items-center justify-center rounded-full bg-[#252525] text-white hover:bg-[#333333] transition">
+              <IconTerminal size={20} stroke={1.5} />
+            </button>
             {photoURL ? (
               <img
                 src={photoURL}
