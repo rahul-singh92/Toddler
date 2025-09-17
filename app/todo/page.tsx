@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export default function TodoPage() {
   const [photoURL, setPhotoURL] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [collapsed, setCollapsed] = useState({
     thisWeek: false,
     thisMonth: true,
@@ -48,7 +49,7 @@ export default function TodoPage() {
     <ProtectedRoute>
       <div className="flex">
         {/* First Sidebar */}
-        <aside className="fixed left-0 top-0 h-screen w-20 bg-[#151515] flex flex-col justify-between items-center py-6">
+        <aside className="fixed left-0 top-0 h-screen w-20 bg-[#151515] flex flex-col justify-between items-center py-6 z-20">
           <div className="flex flex-col items-center space-y-6">
             <div className="mb-8">
               <Image
@@ -63,7 +64,10 @@ export default function TodoPage() {
           {/* User Profile Avatar + Collapse Icon(IconTerminal)*/}
           <div className="flex flex-col items-center space-y-4 mb-4">
             {/* Terminal icon button */}
-            <button className="w-10 h-10 flex items-center justify-center rounded-full bg-[#252525] text-white hover:bg-[#333333] transition">
+            <button
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-[#252525] text-white hover:bg-[#333333] transition"
+              onClick={() => setSidebarCollapsed((prev) => !prev)}
+            >
               <IconTerminal size={20} stroke={1.5} />
             </button>
             {photoURL ? (
@@ -88,7 +92,12 @@ export default function TodoPage() {
         </aside>
 
         {/* Second Sidebar */}
-        <aside className="fixed left-20 top-0 h-screen w-72 bg-black p-5 flex flex-col overflow-y-auto">
+        <motion.aside
+          initial={false}
+          animate={{ x: sidebarCollapsed ? -288 : 0 }} // slide horizontally
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+          className="fixed left-20 top-0 h-screen w-72 bg-black p-5 flex flex-col overflow-y-auto z-10 shadow-lg"
+        >
           {/* Sidebar header */}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-white text-3xl font-medium tracking-wide">
@@ -154,8 +163,8 @@ export default function TodoPage() {
                   <span
                     className={
                       collapsed[group.key as keyof typeof collapsed]
-                        ? "text-[#BDBDBD]" // collapsed color
-                        : "text-[#C8A2D6]" // expanded color
+                        ? "text-[#BDBDBD]"
+                        : "text-[#C8A2D6]"
                     }
                   >
                     {group.title}
@@ -233,16 +242,23 @@ export default function TodoPage() {
               </div>
             </div>
           ))}
-        </aside>
+        </motion.aside>
 
         {/* Main Content */}
-        <main className="flex-1 ml-[23rem] p-6">
+        <motion.main
+          initial={false}
+          animate={{
+            marginLeft: sidebarCollapsed ? "5rem" : "23rem", // adjust based on sidebar state
+          }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+          className="flex-1 p-6"
+        >
           <h1 className="text-2xl font-bold">Your Todo App</h1>
           <p>Welcome! You are logged in.</p>
           <div className="h-[150vh] bg-gray-100 mt-6 rounded-lg p-4">
             Scroll to see sidebars stay fixed.
           </div>
-        </main>
+        </motion.main>
       </div>
     </ProtectedRoute>
   );
