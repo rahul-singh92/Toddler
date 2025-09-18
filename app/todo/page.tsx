@@ -5,14 +5,12 @@ import LeftSidebar from "../components/LeftSidebar";
 import { IconPlus, IconMinus, IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-/* --- helpers --- */
 function getWeekNumber(date: Date) {
   const firstDayofYear = new Date(date.getFullYear(), 0, 1);
   const pastDays = (date.getTime() - firstDayofYear.getTime()) / 86400000;
   return Math.ceil((pastDays + firstDayofYear.getDay() + 1) / 7);
 }
 
-/* --- HeaderBar component (kept here for now) --- */
 function HeaderBar() {
   const today = new Date();
   const [monthYear] = useState(today.toLocaleString("default", { month: "long", year: "numeric" }));
