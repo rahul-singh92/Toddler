@@ -5,8 +5,77 @@ import Image from "next/image";
 import { auth, db } from "../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { IconPlus, IconMinus, IconTerminal } from "@tabler/icons-react";
+import { IconPlus, IconMinus, IconTerminal, IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "framer-motion";
+
+function getWeekNumber(date: Date) {
+  const firstDayofYear = new Date(date.getFullYear(), 0, 1);
+  const pastDays = (date.getTime() - firstDayofYear.getTime()) / 86400000;
+  return Math.ceil((pastDays + firstDayofYear.getDay() + 1) / 7);
+}
+
+function HeaderBar() {
+  const today = new Date();
+  const [monthYear, setMonthYear] = useState(
+    today.toLocaleString("default", { month: "long", year: "numeric" })
+  );
+  const [week, setWeek] = useState(getWeekNumber(today));
+
+  return (
+  <div className="sticky top-0 z-30 bg-white px-8 py-5 flex items-center justify-between">
+    {/* Left section: Month Year / Week */}
+    <div className="flex items-center space-x-6">
+      <h1 className="text-2xl font-bold">{monthYear}</h1>
+      <div className="flex items-center space-x-4">
+        <span className="text-4xl leading-none">/</span>
+        <select className="font-semibold text-lg bg-transparent focus:outline-none cursor-pointer">
+          <option value={week}>W{week}</option>
+        </select>
+      </div>
+      {/* Arrows */}
+      <button className="p-2 rounded hover:bg-gray-100">
+        <IconChevronLeft size={22} stroke={2.2} />
+      </button>
+      <button className="p-2 rounded hover:bg-gray-100">
+        <IconChevronRight size={22} stroke={2.2} />
+      </button>
+    </div>
+
+    {/* Right section: Today & Share buttons */}
+    <div className="flex space-x-3">
+      <button className="px-4 py-2 rounded-md bg-gray-100 text-base font-medium hover:bg-gray-200">
+        Today
+      </button>
+      <button className="px-4 py-2 rounded-md bg-black text-white text-base font-medium hover:bg-gray-800">
+        Share
+      </button>
+    </div>
+  </div>
+  );
+}
+
+function DateBadge() {
+  const [date, setDate] = useState<number>(new Date().getDate());
+
+  //auto update once per hour
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDate(new Date().getDate());
+    }, 1000 * 60 * 60);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="w-12 h-12 bg-[#C8A2D6] rounded-lg flex flex-col items-center text-black font-bold shadow-sm">
+      {/* top bar */}
+      <div className="w-6 h-1 bg-black mt-1 rounded-sm"></div>
+
+      {/* number with gap */}
+      <span className="text-2xl mt-0.5">{date}</span>
+    </div>
+  );
+}
+
 
 export default function TodoPage() {
   const [photoURL, setPhotoURL] = useState<string | null>(null);
@@ -51,6 +120,7 @@ export default function TodoPage() {
         {/* First Sidebar */}
         <aside className="fixed left-0 top-0 h-screen w-20 bg-[#151515] flex flex-col justify-between items-center py-6 z-20">
           <div className="flex flex-col items-center space-y-6">
+            {/* Logo */}
             <div className="mb-8">
               <Image
                 src="/images/main-logo.svg"
@@ -59,6 +129,9 @@ export default function TodoPage() {
                 height={40}
               />
             </div>
+
+            {/* Date Badge */}
+            <DateBadge />
           </div>
 
           {/* User Profile Avatar + Collapse Icon(IconTerminal)*/}
@@ -105,7 +178,7 @@ export default function TodoPage() {
             </h2>
             <button
               aria-label="Add"
-              className="w-9 h-9 bg-[#252525] rounded-md flex items-center justify-center text-white shadow-sm"
+              className="w-9 h-9 bg-[#252525] rounded-md flex items-center justify-center text-white shadow-sm hover:bg-[#1f1f1f]"
               type="button"
             >
               <IconPlus size={16} className="text-white" stroke={1.5} />
@@ -251,12 +324,16 @@ export default function TodoPage() {
             marginLeft: sidebarCollapsed ? "5rem" : "23rem", // adjust based on sidebar state
           }}
           transition={{ duration: 0.3, ease: "easeInOut" }}
-          className="flex-1 p-6"
+          className="flex-1"
         >
-          <h1 className="text-2xl font-bold">Your Todo App</h1>
-          <p>Welcome! You are logged in.</p>
-          <div className="h-[150vh] bg-gray-100 mt-6 rounded-lg p-4">
-            Scroll to see sidebars stay fixed.
+          {/* Fixed HeaderBar */}
+          <HeaderBar />
+          <div className="p-6">
+            <h1 className="text-2xl font-bold">Your Todo App</h1>
+            <p>Welcome! You are logged in.</p>
+            <div className="h-[150vh] bg-gray-100 mt-6 rounded-lg p-4">
+              Scroll to see sidebars stay fixed.
+            </div>
           </div>
         </motion.main>
       </div>
