@@ -1,4 +1,3 @@
-// app/todo/page.tsx
 "use client";
 import { useState } from "react";
 import ProtectedRoute from "../components/ProtectedRoute";
@@ -38,8 +37,8 @@ function HeaderBar() {
       </div>
 
       <div className="flex space-x-3">
-        <button className="px-4 py-2 rounded-md bg-gray-100 text-base font-medium hover:bg-gray-200">Today</button>
-        <button className="px-4 py-2 rounded-md bg-black text-white text-base font-medium hover:bg-gray-800">Share</button>
+        <button className="px-4 py-2 rounded-md bg-[#EAEAEA] text-base font-medium hover:bg-[#D5D5D5]">Today</button>
+        <button className="px-4 py-2 rounded-md bg-black text-white text-base font-medium hover:bg-[#1A1A1A]">Share</button>
       </div>
     </div>
   );
@@ -81,7 +80,7 @@ export default function TodoPage() {
   return (
     <ProtectedRoute>
       <div className="flex">
-        {/* LEFT SIDEBAR (moved to separate component) */}
+        {/* LEFT SIDEBAR */}
         <LeftSidebar onToggleSidebar={() => setSidebarCollapsed((s) => !s)} />
 
         {/* Second Sidebar (slides horizontally behind left sidebar) */}

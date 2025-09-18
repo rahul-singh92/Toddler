@@ -21,7 +21,7 @@ function DateBadge() {
       <div className="w-6 h-1 bg-black mt-1 rounded-sm"></div>
 
       {/* number with gap */}
-      <span className="text-2xl mt-2">{date}</span>
+      <span className="text-2xl mt-0.5">{date}</span>
     </div>
   );
 }
