@@ -277,8 +277,8 @@ export default function TodoPage() {
             </button>
           </div>
 
-          {/* Scrollable Todo Groups Container */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 pt-3">
+          {/* Scrollable Todo Groups Container with Custom Scrollbar */}
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 pt-3 sidebar-custom-scrollbar">
             {groups.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40">
                 <div className="text-[#6A6A6A] text-center">
@@ -482,6 +482,39 @@ export default function TodoPage() {
           onClose={() => setIsModalOpen(false)}
           onTodoAdded={handleTodoAdded}
         />
+
+        {/* Custom Scrollbar Styles for Sidebar */}
+        <style jsx>{`
+          .sidebar-custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+          }
+          
+          .sidebar-custom-scrollbar::-webkit-scrollbar-track {
+            background: #1A1A1A;
+            border-radius: 3px;
+            margin: 8px 0;
+          }
+          
+          .sidebar-custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #3A3A3A;
+            border-radius: 3px;
+            transition: background 0.2s ease;
+          }
+          
+          .sidebar-custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #C8A2D6;
+          }
+          
+          .sidebar-custom-scrollbar::-webkit-scrollbar-thumb:active {
+            background: #B892C6;
+          }
+          
+          /* For Firefox */
+          .sidebar-custom-scrollbar {
+            scrollbar-width: thin;
+            scrollbar-color: #3A3A3A #1A1A1A;
+          }
+        `}</style>
       </div>
     </ProtectedRoute>
   );
