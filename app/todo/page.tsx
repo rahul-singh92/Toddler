@@ -1,173 +1,41 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import ProtectedRoute from "../components/ProtectedRoute";
 import LeftSidebar from "../components/LeftSidebar";
 import TodoModal from "../components/TodoModal";
 import TodoSidebar from "../components/todo/TodoSidebar";
 import TodoDetailsModal from "../components/todo/TodoDetailsModal";
-import { IconChevronLeft, IconChevronRight, IconRepeat } from "@tabler/icons-react";
-import { motion, AnimatePresence } from "framer-motion";
+import StackedTodoCards from "../components/todo/StackedTodoCards";
+import TodoCard from "../components/todo/TodoCard";
+import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
+import { motion } from "framer-motion";
 import { Todo } from "../types/todo";
 import { collection, query, onSnapshot, orderBy } from "firebase/firestore";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "../lib/firebase";
+import { 
+  getWeekNumber, 
+  getCurrentWeekDates, 
+  isThisWeek, 
+  isSameDay, 
+  isThisMonth 
+} from "../utils/dateHelpers";
+import { 
+  generateRecurringDates, 
+  groupOverlappingTodos 
+} from "../utils/todoHelpers";
 
-function getWeekNumber(date: Date) {
-  const firstDayofYear = new Date(date.getFullYear(), 0, 1);
-  const pastDays = (date.getTime() - firstDayofYear.getTime()) / 86400000;
-  return Math.ceil((pastDays + firstDayofYear.getDay() + 1) / 7);
-}
-
-// Helper function to get 5 days centered around today
-function getCurrentWeekDates(): Date[] {
-  const today = new Date();
-  const weekDates = [];
-  
-  // Show: yesterday, today, tomorrow, day after tomorrow, day after that
-  for (let i = -1; i <= 3; i++) {
-    const date = new Date(today.getTime() + i * 24 * 60 * 60 * 1000);
-    weekDates.push(date);
-  }
-  
-  return weekDates;
-}
-
-// Helper function to generate recurring dates for a todo
-function generateRecurringDates(todo: Todo, viewStartDate: Date, viewEndDate: Date): Date[] {
-  if (!todo.recurrence || todo.recurrence.type === 'none' || !todo.startTime) {
-    return []; // Return empty array for non-recurring todos
-  }
-
-  const dates: Date[] = [];
-  const startDate = new Date(todo.startTime);
-  const interval = todo.recurrence.interval || 1;
-  
-  // Set end date - either recurrence end date or 6 months from start (to prevent infinite generation)
-  let endDate = viewEndDate;
-  if (todo.recurrence.endDate) {
-    const recurrenceEndDate = typeof todo.recurrence.endDate === 'string' 
-      ? new Date(todo.recurrence.endDate) 
-      : todo.recurrence.endDate instanceof Date 
-        ? todo.recurrence.endDate
-        : new Date(todo.recurrence.endDate);
-    endDate = new Date(Math.min(endDate.getTime(), recurrenceEndDate.getTime()));
-  }
-
-  let currentDate = new Date(startDate);
-  
-  while (currentDate <= endDate && dates.length < 100) { // Limit to prevent infinite loops
-    // Check if current date is within our view range
-    if (currentDate >= viewStartDate && currentDate <= viewEndDate) {
-      dates.push(new Date(currentDate));
-    }
-    
-    // Calculate next occurrence
-    switch (todo.recurrence.type) {
-      case 'daily':
-        currentDate.setDate(currentDate.getDate() + interval);
-        break;
-      case 'weekly':
-        currentDate.setDate(currentDate.getDate() + (7 * interval));
-        break;
-      case 'monthly':
-        currentDate.setMonth(currentDate.getMonth() + interval);
-        break;
-      case 'yearly':
-        currentDate.setFullYear(currentDate.getFullYear() + interval);
-        break;
-      default:
-        break;
-    }
-    
-    // Safety check to prevent infinite loops
-    if (currentDate.getTime() === startDate.getTime()) {
-      break;
-    }
-  }
-  
-  return dates;
-}
-
-// Helper function to check if two todos overlap in time
-function todosOverlap(todo1: Todo, todo2: Todo): boolean {
-  if (!todo1.startTime || !todo2.startTime) return false;
-  
-  const start1 = todo1.startTime.getTime();
-  const end1 = todo1.endTime ? todo1.endTime.getTime() : start1 + (60 * 60 * 1000); // Default 1 hour
-  const start2 = todo2.startTime.getTime();
-  const end2 = todo2.endTime ? todo2.endTime.getTime() : start2 + (60 * 60 * 1000); // Default 1 hour
-  
-  return start1 < end2 && start2 < end1;
-}
-
-// Helper function to group overlapping todos
-function groupOverlappingTodos(todos: Todo[]): Todo[][] {
-  const groups: Todo[][] = [];
-  const processed = new Set<string>();
-  
-  todos.forEach(todo => {
-    if (!todo.id || processed.has(todo.id)) return;
-    
-    const overlappingGroup = [todo];
-    processed.add(todo.id);
-    
-    todos.forEach(otherTodo => {
-      if (otherTodo.id && otherTodo.id !== todo.id && !processed.has(otherTodo.id)) {
-        // Check if this todo overlaps with any todo in the current group
-        const overlapsWithGroup = overlappingGroup.some(groupTodo => todosOverlap(groupTodo, otherTodo));
-        if (overlapsWithGroup) {
-          overlappingGroup.push(otherTodo);
-          processed.add(otherTodo.id);
-        }
-      }
-    });
-    
-    groups.push(overlappingGroup);
-  });
-  
-  return groups;
-}
-
-// Helper functions for checking dates and weeks
-function isThisWeek(date: Date): boolean {
-  const today = new Date();
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  
-  const todayDay = todayStart.getDay();
-  const mondayOffset = todayDay === 0 ? -6 : 1 - todayDay;
-  const mondayStart = new Date(todayStart.getTime() + mondayOffset * 24 * 60 * 60 * 1000);
-  
-  const sundayEnd = new Date(mondayStart.getTime() + 6 * 24 * 60 * 60 * 1000 + 23 * 60 * 60 * 1000 + 59 * 60 * 1000 + 59 * 1000);
-  
-  return date >= mondayStart && date <= sundayEnd;
-}
-
-function isSameDay(date1: Date, date2: Date): boolean {
-  return date1.getDate() === date2.getDate() &&
-         date1.getMonth() === date2.getMonth() &&
-         date1.getFullYear() === date2.getFullYear();
-}
-
-function isThisMonth(date: Date): boolean {
-  const today = new Date();
-  return date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
-}
-
-function HeaderBar() {
-  const today = new Date();
-  const [currentDate, setCurrentDate] = useState(today);
-  const monthYear = currentDate.toLocaleString("default", { month: "long", year: "numeric" });
-  const week = getWeekNumber(currentDate);
-
-  const navigateWeek = (direction: 'prev' | 'next') => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(currentDate.getDate() + (direction === 'next' ? 5 : -5));
-    setCurrentDate(newDate);
-  };
-
-  const goToToday = () => {
-    setCurrentDate(new Date());
-  };
+function HeaderBar({ 
+  currentWeekStartDate, 
+  onNavigateWeek, 
+  onGoToToday 
+}: { 
+  currentWeekStartDate: Date;
+  onNavigateWeek: (direction: 'prev' | 'next') => void;
+  onGoToToday: () => void;
+}) {
+  const monthYear = currentWeekStartDate.toLocaleString("default", { month: "long", year: "numeric" });
+  const week = getWeekNumber(currentWeekStartDate);
 
   return (
     <div className="sticky top-0 z-30 bg-white px-8 py-5 flex items-center justify-between border-b border-gray-200">
@@ -181,13 +49,13 @@ function HeaderBar() {
         </div>
         <div className="flex items-center space-x-2">
           <button 
-            onClick={() => navigateWeek('prev')}
+            onClick={() => onNavigateWeek('prev')}
             className="p-2 rounded hover:bg-gray-100 transition-colors"
           >
             <IconChevronLeft size={20} stroke={2} className="text-gray-600" />
           </button>
           <button 
-            onClick={() => navigateWeek('next')}
+            onClick={() => onNavigateWeek('next')}
             className="p-2 rounded hover:bg-gray-100 transition-colors"
           >
             <IconChevronRight size={20} stroke={2} className="text-gray-600" />
@@ -197,7 +65,7 @@ function HeaderBar() {
 
       <div className="flex space-x-3">
         <button 
-          onClick={goToToday}
+          onClick={onGoToToday}
           className="px-4 py-2 rounded-md bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors"
         >
           Today
@@ -217,241 +85,26 @@ interface TodoGroup {
   isDateBased?: boolean;
 }
 
-// Individual Todo Card Component - FIXED STACKING
-function TodoCard({ 
-  todo, 
-  onClick, 
-  instanceDate, 
-  stackIndex = 0, 
-  isStacked = false, 
-  isExpanded = false,
-  totalInStack = 1
-}: { 
-  todo: Todo; 
-  onClick: () => void; 
-  instanceDate?: Date;
-  stackIndex?: number;
-  isStacked?: boolean;
-  isExpanded?: boolean;
-  totalInStack?: number;
-}) {
-  const formatTime = (date?: Date) => {
-    if (!date) return '';
-    return date.toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
-      minute: '2-digit', 
-      hour12: true 
-    });
-  };
+// Helper function to get Monday of the week for any given date
+const getMondayOfWeek = (date: Date): Date => {
+  const monday = new Date(date);
+  const dayOfWeek = monday.getDay();
+  const daysToMonday = dayOfWeek === 0 ? -6 : -(dayOfWeek - 1);
+  monday.setDate(monday.getDate() + daysToMonday);
+  return monday;
+};
 
-  // Function to determine if the background color is light or dark
-  const isLightColor = (hex: string) => {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    
-    // Calculate luminance
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    return luminance > 0.5;
-  };
-
-  // Use instanceDate for display if provided (for recurring todos)
-  const displayTime = instanceDate || todo.startTime;
-
-  // Determine text color based on background
-  const textColor = isLightColor(todo.color) ? '#000000' : '#FFFFFF';
-  const timeColor = isLightColor(todo.color) ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.8)';
-
-  // Calculate duration and positioning
-  const calculateTimeSpan = () => {
-    if (!todo.startTime || !todo.endTime) {
-      return { height: 'auto', marginBottom: '8px' }; // Regular height for todos without end time
-    }
-
-    const startHour = todo.startTime.getHours();
-    const endHour = todo.endTime.getHours();
-    const startMinutes = todo.startTime.getMinutes();
-    const endMinutes = todo.endTime.getMinutes();
-
-    // Convert to decimal hours
-    const startDecimal = startHour + startMinutes / 60;
-    const endDecimal = endHour + endMinutes / 60;
-    
-    // Calculate duration in hours
-    const durationHours = endDecimal - startDecimal;
-    
-    // Each hour slot is 64px (h-16 = 4rem = 64px) + 16px gap (space-y-4)
-    const pixelsPerHour = 64 + 16; // 80px total per hour
-    const totalHeight = durationHours * pixelsPerHour - 16; // Subtract gap for last item
-    
-    return {
-      height: `${Math.max(totalHeight, 64)}px`, // Minimum height of one slot
-      marginBottom: '0px' // No margin since it spans multiple slots
-    };
-  };
-
-  const timeSpan = calculateTimeSpan();
-
-  // FIXED: Better stack positioning - cards stack directly on top with small gaps
-  const getStackStyles = () => {
-    if (!isStacked) return {};
-    
-    if (isExpanded) {
-      // Fan-out positioning when expanded - spread horizontally
-      const fanDistance = (stackIndex - (totalInStack - 1) / 2) * 120; // Center the fan
-      const fanAngle = (stackIndex - (totalInStack - 1) / 2) * 8; // Subtle rotation
-      
-      return {
-        transform: `translateX(${fanDistance}px) rotate(${fanAngle}deg)`,
-        transformOrigin: 'center bottom',
-        zIndex: 60 + stackIndex,
-        scale: 1.02 // Slightly larger when expanded
-      };
-    }
-    
-    // FIXED: Stack positioning - cards directly on top with minimal offset
-    const stackOffset = stackIndex * 3; // Very small 3px offset to show edges
-    const depthOffset = stackIndex * -1; // Slight depth effect
-    
-    return {
-      transform: `translateX(${stackOffset}px) translateY(${depthOffset}px)`,
-      zIndex: 20 + stackIndex,
-      marginTop: stackIndex === 0 ? '0px' : '-60px' // Overlap the cards but show small gap
-    };
-  };
-
-  const stackStyles = getStackStyles();
-
-  return (
-    <motion.div 
-      layout
-      initial={false}
-      animate={{
-        ...stackStyles,
-        scale: isExpanded ? (stackStyles.scale || 1.02) : 1
-      }}
-      transition={{ 
-        type: "spring", 
-        stiffness: 400, 
-        damping: 30,
-        duration: 0.3
-      }}
-      className="p-3 rounded-lg shadow-md hover:shadow-xl transition-all duration-200 cursor-pointer relative overflow-hidden"
-      style={{ 
-        backgroundColor: todo.color,
-        height: timeSpan.height,
-        marginBottom: timeSpan.marginBottom,
-        zIndex: stackStyles.zIndex,
-        transform: stackStyles.transform,
-        marginTop: stackStyles.marginTop
-      }}
-      onClick={onClick}
-    >
-      {/* Stack indicator - show count on top card */}
-      {isStacked && stackIndex === totalInStack - 1 && totalInStack > 1 && !isExpanded && (
-        <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gray-800 text-white text-xs flex items-center justify-center font-bold shadow-lg">
-          {totalInStack}
-        </div>
-      )}
-
-      {/* Recurring indicator */}
-      {todo.recurrence?.type !== 'none' && (
-        <div className="absolute top-2 right-2">
-          <IconRepeat size={10} style={{ color: timeColor }} />
-        </div>
-      )}
-
-      {/* Main content */}
-      <div className="h-full flex flex-col">
-        {/* Title */}
-        <h4 
-          className="font-semibold text-sm mb-1 pr-4" 
-          style={{ 
-            color: textColor,
-            lineHeight: '1.2'
-          }}
-        >
-          {todo.title}
-        </h4>
-        
-        {/* Time range */}
-        <div className="text-xs font-medium mb-2" style={{ color: timeColor }}>
-          {displayTime && formatTime(displayTime)}
-          {todo.endTime && todo.startTime && ` - ${formatTime(todo.endTime)}`}
-        </div>
-
-        {/* Description for longer events (only show on top card or when expanded) */}
-        {todo.description && timeSpan.height !== 'auto' && parseInt(timeSpan.height) > 100 && 
-         (stackIndex === totalInStack - 1 || isExpanded) && (
-          <div 
-            className="text-xs opacity-75 flex-1 overflow-hidden"
-            style={{ color: timeColor }}
-          >
-            {todo.description}
-          </div>
-        )}
-
-        {/* Completion indicator - small dot */}
-        {todo.completed && (
-          <div 
-            className="absolute bottom-2 right-2 w-2 h-2 rounded-full"
-            style={{ 
-              backgroundColor: isLightColor(todo.color) ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.8)'
-            }}
-          />
-        )}
-      </div>
-    </motion.div>
-  );
-}
-
-// FIXED: Stacked Todo Cards Component - Proper layered stacking
-function StackedTodoCards({ todos, onTodoClick }: { todos: Todo[]; onTodoClick: (todo: Todo) => void }) {
-  const [isHovered, setIsHovered] = useState(false);
-  
-  if (todos.length === 1) {
-    return (
-      <TodoCard 
-        todo={todos[0]} 
-        onClick={() => onTodoClick(todos[0])}
-        instanceDate={todos[0].startTime}
-      />
-    );
+// Helper function to generate full week dates (Monday to Sunday - 7 days)
+const getWeekDates = (mondayDate: Date): Date[] => {
+  const weekDates = [];
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(mondayDate);
+    date.setDate(mondayDate.getDate() + i);
+    weekDates.push(date);
   }
+  return weekDates;
+};
 
-  // Sort todos by priority and creation time for consistent stacking order
-  const sortedTodos = [...todos].sort((a, b) => {
-    const priorityOrder = { high: 3, medium: 2, low: 1 };
-    const aPriority = priorityOrder[a.priority as keyof typeof priorityOrder] || 1;
-    const bPriority = priorityOrder[b.priority as keyof typeof priorityOrder] || 1;
-    
-    if (aPriority !== bPriority) return aPriority - bPriority; // Lower priority first (bottom of stack)
-    return a.createdAt.getTime() - b.createdAt.getTime(); // Older first
-  });
-
-  return (
-    <div 
-      className="relative"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      {sortedTodos.map((todo, index) => (
-        <TodoCard
-          key={todo.id}
-          todo={todo}
-          onClick={() => onTodoClick(todo)}
-          instanceDate={todo.startTime}
-          stackIndex={index}
-          isStacked={true}
-          isExpanded={isHovered}
-          totalInStack={sortedTodos.length}
-        />
-      ))}
-    </div>
-  );
-}
-
-/* --- Todo page --- */
 export default function TodoPage() {
   const [user] = useAuthState(auth);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -460,12 +113,166 @@ export default function TodoPage() {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentWeekDates, setCurrentWeekDates] = useState(getCurrentWeekDates());
+  
+  // Scroll container refs for synchronization
+  const headerScrollRef = useRef<HTMLDivElement>(null);
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+  
+  // Track current week start (Monday)
+  const [currentWeekStartDate, setCurrentWeekStartDate] = useState(() => getMondayOfWeek(new Date()));
+  const [currentWeekDates, setCurrentWeekDates] = useState(() => getWeekDates(getMondayOfWeek(new Date())));
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  // Update week dates when component mounts
+  // Update week dates when week start date changes
   useEffect(() => {
-    setCurrentWeekDates(getCurrentWeekDates());
+    const weekDates = getWeekDates(currentWeekStartDate);
+    setCurrentWeekDates(weekDates);
+  }, [currentWeekStartDate]);
+
+  // Function to center today's column with proper dimension checks
+  const centerTodayColumn = () => {
+    const today = new Date();
+    const todayIndex = currentWeekDates.findIndex(date => isSameDay(date, today));
+    
+    if (todayIndex === -1 || !headerScrollRef.current || !contentScrollRef.current) {
+      return;
+    }
+
+    // Use requestAnimationFrame to ensure layout is complete [web:79][web:84]
+    requestAnimationFrame(() => {
+      const headerContainer = headerScrollRef.current!;
+      const contentContainer = contentScrollRef.current!;
+      
+      // Check if container has proper dimensions
+      const containerWidth = contentContainer.clientWidth;
+      if (containerWidth === 0) {
+        // Retry after a short delay if dimensions aren't ready
+        setTimeout(centerTodayColumn, 100);
+        return;
+      }
+
+      const dayWidth = 180; // minWidth from styling
+      const gap = 16; // gap-4 = 16px
+      const dayTotalWidth = dayWidth + gap;
+      
+      // Calculate position to center today's column
+      const todayLeftEdge = todayIndex * dayTotalWidth;
+      const scrollPosition = todayLeftEdge - (containerWidth / 2) + (dayWidth / 2);
+      
+      // Ensure we don't scroll beyond bounds
+      const maxScroll = Math.max(0, (currentWeekDates.length * dayTotalWidth) - containerWidth);
+      const finalScrollPosition = Math.max(0, Math.min(scrollPosition, maxScroll));
+      
+      // Scroll both containers simultaneously
+      headerContainer.scrollTo({
+        left: finalScrollPosition,
+        behavior: isInitialLoad ? 'auto' : 'smooth' // Instant on initial load, smooth otherwise
+      });
+      contentContainer.scrollTo({
+        left: finalScrollPosition,
+        behavior: isInitialLoad ? 'auto' : 'smooth'
+      });
+    });
+  };
+
+  // Use useLayoutEffect for initial centering to avoid flash [web:96]
+  useLayoutEffect(() => {
+    if (isInitialLoad) {
+      // Multiple attempts to ensure proper centering
+      const attempts = [0, 50, 150, 300]; // Progressive delays
+      attempts.forEach(delay => {
+        setTimeout(() => {
+          centerTodayColumn();
+          if (delay === 300) setIsInitialLoad(false); // Mark initial load complete
+        }, delay);
+      });
+    }
+  }, [currentWeekDates, isInitialLoad]);
+
+  // Regular useEffect for subsequent centering
+  useEffect(() => {
+    if (!isInitialLoad) {
+      centerTodayColumn();
+    }
+  }, [currentWeekDates]);
+
+  // Synchronize scrolling between header and content
+  const handleHeaderScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (contentScrollRef.current) {
+      contentScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  };
+
+  const handleContentScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (headerScrollRef.current) {
+      headerScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  };
+
+  // Week navigation functions
+  const navigateWeek = (direction: 'prev' | 'next') => {
+    const newWeekStart = new Date(currentWeekStartDate);
+    newWeekStart.setDate(currentWeekStartDate.getDate() + (direction === 'next' ? 7 : -7));
+    setCurrentWeekStartDate(newWeekStart);
+  };
+
+  const goToToday = () => {
+    const todayMondayStart = getMondayOfWeek(new Date());
+    setCurrentWeekStartDate(todayMondayStart);
+    
+    // Force re-centering after state update
+    setTimeout(() => {
+      centerTodayColumn();
+    }, 100);
+  };
+
+  // Enhanced horizontal scrolling with better vertical scroll detection
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      const target = e.target as Element;
+      const isOverScrollContainer = target?.closest('.horizontal-scroll-container');
+      
+      if (isOverScrollContainer) {
+        const container = isOverScrollContainer as HTMLElement;
+        const canScrollHorizontally = container.scrollWidth > container.clientWidth;
+        const isVerticalScroll = Math.abs(e.deltaY) > Math.abs(e.deltaX);
+        
+        if (canScrollHorizontally && isVerticalScroll) {
+          if (e.shiftKey || Math.abs(e.deltaX) > 0) {
+            e.preventDefault();
+            const scrollAmount = e.deltaY;
+            
+            // Scroll both containers
+            if (headerScrollRef.current) {
+              headerScrollRef.current.scrollBy({
+                left: scrollAmount,
+                behavior: 'smooth'
+              });
+            }
+            if (contentScrollRef.current) {
+              contentScrollRef.current.scrollBy({
+                left: scrollAmount,
+                behavior: 'smooth'
+              });
+            }
+          }
+        }
+      }
+    };
+
+    document.addEventListener('wheel', handleWheel, { passive: false });
+    return () => document.removeEventListener('wheel', handleWheel);
   }, []);
+
+  // Handle window resize to re-center today's column
+  useEffect(() => {
+    const handleResize = () => {
+      setTimeout(centerTodayColumn, 100);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [currentWeekDates]);
 
   // Fetch todos from Firestore in real-time
   useEffect(() => {
@@ -561,8 +368,10 @@ export default function TodoPage() {
 
     // Date-based groups with expanded todos
     const thisWeekTodos = expandedTodos.filter(todo => {
-      if (todo.startTime) return isThisWeek(todo.startTime);
-      return isThisWeek(todo.createdAt);
+      if (todo.startTime) {
+        return currentWeekDates.some(weekDate => isSameDay(todo.startTime!, weekDate));
+      }
+      return currentWeekDates.some(weekDate => isSameDay(todo.createdAt, weekDate));
     });
 
     const thisMonthTodos = expandedTodos.filter(todo => {
@@ -613,7 +422,7 @@ export default function TodoPage() {
 
   const groups = getGroupedTodos();
 
-  // Get todos for a specific date - MODIFIED FOR STACKING
+  // Get todos for a specific date
   const getTodosForDate = (date: Date): Todo[] => {
     const result: Todo[] = [];
     const viewStartDate = new Date(Math.min(...currentWeekDates.map(d => d.getTime())));
@@ -621,12 +430,10 @@ export default function TodoPage() {
     
     todos.forEach(todo => {
       if (todo.recurrence?.type !== 'none' && todo.startTime) {
-        // Check if this recurring todo should appear on this date
         const recurringDates = generateRecurringDates(todo, viewStartDate, viewEndDate);
         const matchingDate = recurringDates.find(recurDate => isSameDay(recurDate, date));
         
         if (matchingDate) {
-          // Create instance for this date
           result.push({
             ...todo,
             id: `${todo.id}-${matchingDate.getTime()}`,
@@ -637,7 +444,6 @@ export default function TodoPage() {
           });
         }
       } else {
-        // Non-recurring todos
         if (todo.startTime) {
           if (isSameDay(todo.startTime, date)) {
             result.push(todo);
@@ -675,58 +481,61 @@ export default function TodoPage() {
           className="flex-1 overflow-x-hidden bg-white"
         >
           {/* Fixed top header */}
-          <HeaderBar />
+          <HeaderBar 
+            currentWeekStartDate={currentWeekStartDate}
+            onNavigateWeek={navigateWeek}
+            onGoToToday={goToToday}
+          />
           
           {/* Calendar Grid */}
           <div className="p-6">
-            {/* Date Headers Row */}
-            <div className="grid grid-cols-6 gap-4 mb-6">
-              {/* Empty space for time labels column */}
+            {/* Synchronized Scrollable Date Headers Row */}
+            <div className="grid grid-cols-1 gap-4 mb-6" style={{ gridTemplateColumns: 'auto 1fr' }}>
               <div></div>
               
-              {/* Date headers */}
-              {currentWeekDates.map((date, index) => {
-                const isToday = isSameDay(date, new Date());
-                
-                return (
-                  <div key={index} className="text-center">
-                    <div className={`text-5xl font-bold mb-1 ${
-                      isToday 
-                        ? 'text-black' 
-                        : 'text-gray-400'
-                    }`}>
-                      {date.getDate().toString().padStart(2, '0')}
-                    </div>
-                    <div className={`text-sm font-medium lowercase tracking-wide ${
-                      isToday 
-                        ? 'text-black font-bold' 
-                        : 'text-gray-500 font-normal'
-                    }`}>
-                      {date.toLocaleDateString('en-US', { weekday: 'short' })}
-                    </div>
-                    {/* Small vertical line under the day name - darker for current day */}
-                    <div className="flex justify-center mt-2">
-                      <div className={`w-0.5 h-4 ${
-                        isToday 
-                          ? 'bg-black' 
-                          : 'bg-gray-300'
-                      }`}></div>
-                    </div>
-                  </div>
-                );
-              })}
+              {/* Horizontally scrollable date headers */}
+              <div 
+                ref={headerScrollRef}
+                className="overflow-x-auto scrollbar-hide horizontal-scroll-container"
+                onScroll={handleHeaderScroll}
+              >
+                <div className="flex gap-4 min-w-max">
+                  {currentWeekDates.map((date, index) => {
+                    const isToday = isSameDay(date, new Date());
+                    
+                    return (
+                      <div key={index} className="text-center flex-shrink-0" style={{ minWidth: '180px' }}>
+                        <div className={`text-5xl font-bold mb-1 ${
+                          isToday ? 'text-black' : 'text-gray-400'
+                        }`}>
+                          {date.getDate().toString().padStart(2, '0')}
+                        </div>
+                        <div className={`text-sm font-medium lowercase tracking-wide ${
+                          isToday ? 'text-black font-bold' : 'text-gray-500 font-normal'
+                        }`}>
+                          {date.toLocaleDateString('en-US', { weekday: 'short' })}
+                        </div>
+                        <div className="flex justify-center mt-2">
+                          <div className={`w-0.5 h-4 ${
+                            isToday ? 'bg-black' : 'bg-gray-300'
+                          }`}></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
-            {/* Time labels column + Date columns - EXPANDED TIME RANGE */}
-            <div className="grid grid-cols-6 gap-4">
-              {/* Time labels column - Extended from 6 AM to 11 PM */}
+            {/* Time labels column + Synchronized Scrollable Date columns */}
+            <div className="grid grid-cols-1 gap-4" style={{ gridTemplateColumns: 'auto 1fr' }}>
+              {/* Fixed Time labels column */}
               <div className="space-y-4">
                 <div className="h-20 flex items-start pt-2">
                   <span className="text-xs text-gray-500 font-medium">all day</span>
                 </div>
-                {/* Time slots - Extended range */}
                 {Array.from({ length: 17 }, (_, i) => {
-                  const hour = i + 6; // Start from 6 AM
+                  const hour = i + 6;
                   let timeLabel;
                   if (hour === 0) timeLabel = '12 am';
                   else if (hour === 12) timeLabel = '12 pm';
@@ -741,95 +550,109 @@ export default function TodoPage() {
                 })}
               </div>
 
-              {/* Date columns - 5 days centered around today */}
-              {currentWeekDates.map((date, index) => {
-                const dayTodos = getTodosForDate(date);
-                
-                return (
-                  <div key={index} className="relative">
-                    {/* All day events */}
-                    <div className="min-h-[80px] space-y-2 mb-4">
-                      {dayTodos
-                        .filter(todo => !todo.startTime || todo.startTime.getHours() === 0)
-                        .map(todo => (
-                          <TodoCard 
-                            key={todo.id} 
-                            todo={todo} 
-                            onClick={() => handleTodoClick(todo)}
-                          />
-                        ))}
-                    </div>
-
-                    {/* Time slot events - MODIFIED FOR STACKING */}
-                    <div className="relative" style={{ minHeight: '17 * 80px' }}>
-                      {/* Group overlapping todos and render stacks */}
-                      {(() => {
-                        const timedTodos = dayTodos.filter(todo => todo.startTime && todo.startTime.getHours() > 0);
-                        const overlappingGroups = groupOverlappingTodos(timedTodos);
-                        
-                        return overlappingGroups.map((todoGroup, groupIndex) => {
-                          const firstTodo = todoGroup[0];
-                          const startHour = firstTodo.startTime!.getHours();
-                          const startMinutes = firstTodo.startTime!.getMinutes();
-                          
-                          // Calculate position from 6 AM (our start time)
-                          const hoursFromStart = startHour - 6;
-                          const minutesFromStart = startMinutes;
-                          
-                          // Each hour slot is 80px (64px height + 16px gap)
-                          const topOffset = (hoursFromStart * 80) + (minutesFromStart / 60 * 80);
-                          
-                          return (
-                            <div
-                              key={`group-${groupIndex}`}
-                              className="absolute w-full"
-                              style={{ 
-                                top: `${Math.max(topOffset, 0)}px`,
-                                zIndex: 10 + groupIndex
-                              }}
-                            >
-                              <StackedTodoCards 
-                                todos={todoGroup}
-                                onTodoClick={handleTodoClick}
+              {/* Horizontally scrollable days container */}
+              <div 
+                ref={contentScrollRef}
+                className="overflow-x-auto scrollbar-hide horizontal-scroll-container"
+                onScroll={handleContentScroll}
+              >
+                <div className="flex gap-4 min-w-max">
+                  {currentWeekDates.map((date, index) => {
+                    const dayTodos = getTodosForDate(date);
+                    
+                    return (
+                      <div key={index} className="relative flex-shrink-0" style={{ minWidth: '180px' }}>
+                        {/* All day events */}
+                        <div className="min-h-[80px] space-y-2 mb-4">
+                          {dayTodos
+                            .filter(todo => !todo.startTime || todo.startTime.getHours() === 0)
+                            .map(todo => (
+                              <TodoCard 
+                                key={todo.id} 
+                                todo={todo} 
+                                onClick={() => handleTodoClick(todo)}
                               />
-                            </div>
-                          );
-                        });
-                      })()}
+                            ))}
+                        </div>
 
-                      {/* Background grid lines */}
-                      {Array.from({ length: 17 }, (_, hourIndex) => (
-                        <div 
-                          key={hourIndex} 
-                          className="absolute w-full border-t border-gray-100 pointer-events-none"
-                          style={{ 
-                            top: `${hourIndex * 80}px`,
-                            height: '64px'
-                          }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+                        {/* Time slot events */}
+                        <div className="relative" style={{ minHeight: '1360px' }}>
+                          {(() => {
+                            const timedTodos = dayTodos.filter(todo => todo.startTime && todo.startTime.getHours() > 0);
+                            const overlappingGroups = groupOverlappingTodos(timedTodos);
+                            
+                            return overlappingGroups.map((todoGroup, groupIndex) => {
+                              const firstTodo = todoGroup[0];
+                              const startHour = firstTodo.startTime!.getHours();
+                              const startMinutes = firstTodo.startTime!.getMinutes();
+                              
+                              const hoursFromStart = startHour - 6;
+                              const minutesFromStart = startMinutes;
+                              const topOffset = (hoursFromStart * 80) + (minutesFromStart / 60 * 80);
+                              
+                              return (
+                                <div
+                                  key={`group-${groupIndex}`}
+                                  className="absolute w-full"
+                                  style={{ 
+                                    top: `${Math.max(topOffset, 0)}px`,
+                                    zIndex: 10 + groupIndex
+                                  }}
+                                >
+                                  <StackedTodoCards 
+                                    todos={todoGroup}
+                                    onTodoClick={handleTodoClick}
+                                  />
+                                </div>
+                              );
+                            });
+                          })()}
+
+                          {/* Background grid lines */}
+                          {Array.from({ length: 17 }, (_, hourIndex) => (
+                            <div 
+                              key={hourIndex} 
+                              className="absolute w-full border-t border-gray-100 pointer-events-none"
+                              style={{ 
+                                top: `${hourIndex * 80}px`,
+                                height: '64px'
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         </motion.main>
 
-        {/* Todo Modal */}
+        {/* Modals */}
         <TodoModal 
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           onTodoAdded={handleTodoAdded}
         />
 
-        {/* Todo Details Modal */}
         <TodoDetailsModal
           isOpen={isDetailsModalOpen}
           onClose={() => setIsDetailsModalOpen(false)}
           todo={selectedTodo}
         />
       </div>
+
+      {/* Custom scrollbar styles */}
+      <style jsx global>{`
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
     </ProtectedRoute>
   );
 }
