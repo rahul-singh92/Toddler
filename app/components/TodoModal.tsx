@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { IconX, IconCalendar, IconLink, IconPlus, IconTrash, IconEdit } from "@tabler/icons-react";
+import { IconX, IconCalendar, IconLink, IconPlus, IconTrash, IconEdit, IconRepeat } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { addDoc, collection, Timestamp } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
@@ -27,6 +27,18 @@ const initialFormData: TodoFormData = {
   color: "#C8A2D6",
 };
 
+// Helper function for date formatting
+const formatDateForPicker = (date?: string | Date): string | undefined => {
+  if (!date) return undefined;
+  
+  if (typeof date === 'string') {
+    return date;
+  }
+  
+  // Convert Date to ISO string for the picker
+  return date.toISOString();
+};
+
 export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalProps) {
   const [user] = useAuthState(auth);
   const [formData, setFormData] = useState<TodoFormData>(initialFormData);
@@ -42,6 +54,10 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
   // DateTime picker states
   const [isStartTimePickerOpen, setIsStartTimePickerOpen] = useState(false);
   const [isEndTimePickerOpen, setIsEndTimePickerOpen] = useState(false);
+  const [isRecurrenceEndDatePickerOpen, setIsRecurrenceEndDatePickerOpen] = useState(false);
+
+  // Recurrence states
+  const [recurrence, setRecurrence] = useState<Recurrence>({ type: 'none' });
 
   // Predefined categories
   const predefinedCategories = [
@@ -66,6 +82,15 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
     { value: "high", label: "High" },
   ];
 
+  // Recurrence options
+  const recurrenceOptions = [
+    { value: "none", label: "No Recurrence" },
+    { value: "daily", label: "Daily" },
+    { value: "weekly", label: "Weekly" },
+    { value: "monthly", label: "Monthly" },
+    { value: "yearly", label: "Yearly" },
+  ];
+
   // Reset form when modal opens/closes
   useEffect(() => {
     if (isOpen) {
@@ -75,6 +100,7 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
       setErrors({});
       setIsCustomCategory(false);
       setCustomCategoryName("");
+      setRecurrence({ type: 'none' });
     }
   }, [isOpen]);
 
@@ -94,6 +120,20 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
       const end = new Date(formData.endTime);
       if (start >= end) {
         newErrors.endTime = "End time must be after start time";
+      }
+    }
+
+    // Validate recurrence
+    if (recurrence.type !== 'none') {
+      if (recurrence.interval && recurrence.interval < 1) {
+        newErrors.recurrenceInterval = "Interval must be at least 1";
+      }
+      if (recurrence.endDate && formData.startTime) {
+        const startDate = new Date(formData.startTime);
+        const endDate = new Date(recurrence.endDate);
+        if (endDate <= startDate) {
+          newErrors.recurrenceEndDate = "Recurrence end date must be after start date";
+        }
       }
     }
 
@@ -162,6 +202,34 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
     setLinksList(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Recurrence handlers
+  const handleRecurrenceTypeChange = (value: string) => {
+    if (value === 'none') {
+      setRecurrence({ type: 'none' });
+    } else {
+      setRecurrence(prev => ({ 
+        ...prev, 
+        type: value as 'daily' | 'weekly' | 'monthly' | 'yearly',
+        interval: prev.interval || 1
+      }));
+    }
+    
+    // Clear recurrence errors
+    if (errors.recurrenceInterval) {
+      setErrors(prev => ({ ...prev, recurrenceInterval: "" }));
+    }
+  };
+
+  const handleRecurrenceIntervalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value) || 1;
+    setRecurrence(prev => ({ ...prev, interval: Math.max(1, value) }));
+    
+    // Clear error
+    if (errors.recurrenceInterval) {
+      setErrors(prev => ({ ...prev, recurrenceInterval: "" }));
+    }
+  };
+
   const formatDateTimeForDisplay = (dateTimeString: string) => {
     if (!dateTimeString) return "Select date & time";
     const date = new Date(dateTimeString);
@@ -175,6 +243,44 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
     });
   };
 
+  const formatRecurrenceEndDateForDisplay = (dateTimeString?: string | Date) => {
+    if (!dateTimeString) return "Select end date (optional)";
+    
+    // Handle both string and Date types
+    const date = typeof dateTimeString === 'string' ? new Date(dateTimeString) : dateTimeString;
+    
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const getRecurrencePreview = () => {
+    if (recurrence.type === 'none') return '';
+    
+    const interval = recurrence.interval || 1;
+    const typeText = {
+      daily: interval === 1 ? 'day' : 'days',
+      weekly: interval === 1 ? 'week' : 'weeks', 
+      monthly: interval === 1 ? 'month' : 'months',
+      yearly: interval === 1 ? 'year' : 'years'
+    };
+    
+    let preview = `Repeats every ${interval > 1 ? interval + ' ' : ''}${typeText[recurrence.type]}`;
+    
+    if (recurrence.endDate) {
+      // Handle both string and Date types
+      const endDate = typeof recurrence.endDate === 'string' 
+        ? new Date(recurrence.endDate) 
+        : recurrence.endDate;
+      
+      preview += ` until ${endDate.toLocaleDateString()}`;
+    }
+    
+    return preview;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -184,9 +290,6 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
 
     try {
       const now = new Date();
-      const recurrence: Recurrence = {
-        type: 'none'
-      };
 
       // Use custom category name if it's a custom category
       const categoryToSave = isCustomCategory ? customCategoryName.toLowerCase().trim() : formData.category;
@@ -204,7 +307,7 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
         createdAt: now,
         updatedAt: now,
         sharedWith: [],
-        recurrence,
+        recurrence: recurrence,
         ownerId: user.uid,
       };
 
@@ -216,6 +319,10 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
         endTime: todoData.endTime ? Timestamp.fromDate(todoData.endTime) : null,
         createdAt: Timestamp.fromDate(todoData.createdAt),
         updatedAt: Timestamp.fromDate(todoData.updatedAt),
+        recurrence: {
+          ...recurrence,
+          endDate: recurrence.endDate ? Timestamp.fromDate(new Date(recurrence.endDate)) : null
+        }
       });
 
       const newTodo: Todo = { ...todoData, id: docRef.id };
@@ -398,6 +505,103 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                 </div>
               </div>
 
+              {/* Recurrence Section */}
+              <div className="min-w-0">
+                <label className="block text-white text-sm font-medium mb-2 flex items-center gap-2">
+                  <IconRepeat size={16} />
+                  Recurrence
+                </label>
+                
+                <div className="space-y-4">
+                  {/* Recurrence Type */}
+                  <CustomDropdown
+                    options={recurrenceOptions}
+                    value={recurrence.type}
+                    onChange={handleRecurrenceTypeChange}
+                    placeholder="Select recurrence..."
+                  />
+
+                  {/* Recurrence Details - Show only if not 'none' */}
+                  <AnimatePresence>
+                    {recurrence.type !== 'none' && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.3, ease: "easeInOut" }}
+                        className="space-y-4 bg-[#252525] rounded-lg p-4 border border-[#3A3A3A]"
+                      >
+                        {/* Interval Input */}
+                        <div>
+                          <label className="block text-white text-sm font-medium mb-2">
+                            Repeat Every
+                          </label>
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="number"
+                              min="1"
+                              max="999"
+                              value={recurrence.interval || 1}
+                              onChange={handleRecurrenceIntervalChange}
+                              className="w-20 px-3 py-2 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white placeholder-[#6A6A6A] focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent transition-all duration-200"
+                            />
+                            <span className="text-[#BDBDBD] text-sm">
+                              {recurrence.type === 'daily' && ((recurrence.interval || 1) === 1 ? 'day' : 'days')}
+                              {recurrence.type === 'weekly' && ((recurrence.interval || 1) === 1 ? 'week' : 'weeks')}
+                              {recurrence.type === 'monthly' && ((recurrence.interval || 1) === 1 ? 'month' : 'months')}
+                              {recurrence.type === 'yearly' && ((recurrence.interval || 1) === 1 ? 'year' : 'years')}
+                            </span>
+                          </div>
+                          {errors.recurrenceInterval && (
+                            <p className="text-red-400 text-sm mt-1">{errors.recurrenceInterval}</p>
+                          )}
+                        </div>
+
+                        {/* End Date (Optional) - FIXED: Separate buttons to avoid nesting */}
+                        <div>
+                          <label className="block text-white text-sm font-medium mb-2">
+                            End Date (Optional)
+                          </label>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setIsRecurrenceEndDatePickerOpen(true)}
+                              className="flex-1 px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-left focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent transition-all duration-200 hover:bg-[#333333] flex items-center justify-between min-w-0"
+                            >
+                              <span className={`truncate ${recurrence.endDate ? "text-white" : "text-[#6A6A6A]"}`}>
+                                {formatRecurrenceEndDateForDisplay(recurrence.endDate)}
+                              </span>
+                              <IconCalendar size={16} className="text-[#6A6A6A] flex-shrink-0 ml-2" />
+                            </button>
+                            
+                            {/* Separate clear button */}
+                            {recurrence.endDate && (
+                              <button
+                                type="button"
+                                onClick={() => setRecurrence(prev => ({ ...prev, endDate: undefined }))}
+                                className="px-3 py-3 bg-red-500/10 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded-lg transition-all duration-200 flex items-center justify-center"
+                                title="Clear end date"
+                              >
+                                <IconX size={16} />
+                              </button>
+                            )}
+                          </div>
+                          {errors.recurrenceEndDate && (
+                            <p className="text-red-400 text-sm mt-1">{errors.recurrenceEndDate}</p>
+                          )}
+                        </div>
+
+                        {/* Recurrence Preview */}
+                        <div className="bg-[#1A1A1A] rounded-lg p-3 border border-[#2A2A2A]">
+                          <p className="text-[#6A6A6A] text-xs mb-1">Preview:</p>
+                          <p className="text-[#C8A2D6] text-sm">{getRecurrencePreview()}</p>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+
               {/* Links */}
               <div className="min-w-0">
                 <label className="block text-white text-sm font-medium mb-2 flex items-center gap-2">
@@ -499,6 +703,7 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                       {formData.priority === 'high' && <div className="w-2 h-2 rounded-full bg-red-500" title="High Priority" />}
                       {formData.priority === 'medium' && <div className="w-2 h-2 rounded-full bg-yellow-500" title="Medium Priority" />}
                       {formData.priority === 'low' && <div className="w-2 h-2 rounded-full bg-green-500" title="Low Priority" />}
+                      {recurrence.type !== 'none' && <IconRepeat size={12} className="text-[#C8A2D6]" title="Recurring" />}
                       <div 
                         className="w-3 h-3 rounded-full" 
                         style={{ backgroundColor: formData.color }}
@@ -514,6 +719,11 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                         customCategoryName.charAt(0).toUpperCase() + customCategoryName.slice(1) : 
                         predefinedCategories.find(cat => cat.value === formData.category)?.label || formData.category
                       }
+                    </p>
+                  )}
+                  {recurrence.type !== 'none' && (
+                    <p className="text-[#6A6A6A] text-xs mt-1">
+                      {getRecurrencePreview()}
                     </p>
                   )}
                 </motion.div>
@@ -556,6 +766,19 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
         onConfirm={(dateTime) => setFormData(prev => ({ ...prev, endTime: dateTime }))}
         title="Select End Date & Time"
         initialValue={formData.endTime}
+      />
+
+      <ModernDateTimePicker
+        isOpen={isRecurrenceEndDatePickerOpen}
+        onClose={() => setIsRecurrenceEndDatePickerOpen(false)}
+        onConfirm={(dateTime) => {
+          // Keep just the date part for recurrence end date
+          const date = new Date(dateTime);
+          date.setHours(23, 59, 59, 999); // Set to end of day for end date
+          setRecurrence(prev => ({ ...prev, endDate: date.toISOString() }));
+        }}
+        title="Select Recurrence End Date"
+        initialValue={formatDateForPicker(recurrence.endDate)}
       />
 
       {/* Custom Scrollbar Styles */}
