@@ -8,6 +8,7 @@ import { useAuthState } from "react-firebase-hooks/auth";
 import { Todo, TodoFormData, Recurrence } from "../types/todo";
 import CustomDropdown from "./ui/CustomDropdown";
 import ModernDateTimePicker from "./ui/ModernDateTimePicker";
+import ColorPicker from "./ui/ColorPicker";
 
 interface TodoModalProps {
   isOpen: boolean;
@@ -228,23 +229,12 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
     }
   };
 
-  const colorOptions = [
-    "#C8A2D6", // Current purple
-    "#FF6B6B", // Red
-    "#4ECDC4", // Teal
-    "#45B7D1", // Blue
-    "#F9CA24", // Yellow
-    "#6C5CE7", // Purple
-    "#A0E7E5", // Light teal
-    "#FEA47F", // Orange
-  ];
-
   if (!isOpen) return null;
 
   return (
     <>
       <AnimatePresence>
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -259,7 +249,7 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative w-full max-w-2xl mx-4 bg-[#1A1A1A] rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden"
+            className="relative w-full max-w-2xl bg-[#1A1A1A] rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden"
           >
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-[#2A2A2A]">
@@ -272,10 +262,10 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
               </button>
             </div>
 
-            {/* Form with Custom Scrollbar */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[calc(90vh-120px)] overflow-y-auto custom-scrollbar">
+            {/* Form with Custom Scrollbar and No Horizontal Overflow */}
+            <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[calc(90vh-120px)] overflow-y-auto overflow-x-hidden custom-scrollbar">
               {/* Title */}
-              <div>
+              <div className="min-w-0">
                 <label className="block text-white text-sm font-medium mb-2">
                   Title *
                 </label>
@@ -284,14 +274,15 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                   name="title"
                   value={formData.title}
                   onChange={handleInputChange}
-                  className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white placeholder-[#6A6A6A] focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent transition-all duration-200"
+                  className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white placeholder-[#6A6A6A] focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent transition-all duration-200 break-words"
                   placeholder="Enter todo title..."
+                  style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
                 />
                 {errors.title && <p className="text-red-400 text-sm mt-1">{errors.title}</p>}
               </div>
 
               {/* Description */}
-              <div>
+              <div className="min-w-0">
                 <label className="block text-white text-sm font-medium mb-2">
                   Description
                 </label>
@@ -302,12 +293,13 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                   rows={3}
                   className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white placeholder-[#6A6A6A] focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent resize-none transition-all duration-200"
                   placeholder="Add a description..."
+                  style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
                 />
               </div>
 
               {/* Category & Priority Row */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="min-w-0">
                   <label className="block text-white text-sm font-medium mb-2">
                     Category
                   </label>
@@ -327,12 +319,13 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                           value={customCategoryName}
                           onChange={handleCustomCategoryChange}
                           placeholder="Enter custom category name..."
-                          className="flex-1 px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white placeholder-[#6A6A6A] focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent transition-all duration-200"
+                          className="flex-1 min-w-0 px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white placeholder-[#6A6A6A] focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent transition-all duration-200"
+                          style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
                         />
                         <button
                           type="button"
                           onClick={switchBackToDropdown}
-                          className="px-3 py-3 bg-[#3A3A3A] text-[#BDBDBD] rounded-lg hover:bg-[#4A4A4A] transition-all duration-200"
+                          className="flex-shrink-0 px-3 py-3 bg-[#3A3A3A] text-[#BDBDBD] rounded-lg hover:bg-[#4A4A4A] transition-all duration-200"
                           title="Switch back to predefined categories"
                         >
                           <IconEdit size={16} />
@@ -342,7 +335,8 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                         <motion.p 
                           initial={{ opacity: 0, y: -5 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className="text-[#C8A2D6] text-xs"
+                          className="text-[#C8A2D6] text-xs break-words"
+                          style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
                         >
                           Preview: {customCategoryName.charAt(0).toUpperCase() + customCategoryName.slice(1)}
                         </motion.p>
@@ -350,10 +344,10 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                     </div>
                   )}
                   
-                  {errors.category && <p className="text-red-400 text-sm mt-1">{errors.category}</p>}
+                  {errors.category && <p className="text-red-400 text-sm mt-1 break-words">{errors.category}</p>}
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="block text-white text-sm font-medium mb-2">
                     Priority
                   </label>
@@ -367,8 +361,8 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
               </div>
 
               {/* Time Range */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="min-w-0">
                   <label className="block text-white text-sm font-medium mb-2 flex items-center gap-2">
                     <IconCalendar size={16} />
                     Start Date & Time
@@ -376,16 +370,16 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                   <button
                     type="button"
                     onClick={() => setIsStartTimePickerOpen(true)}
-                    className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-left focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent transition-all duration-200 hover:bg-[#333333] flex items-center justify-between"
+                    className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-left focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent transition-all duration-200 hover:bg-[#333333] flex items-center justify-between min-w-0"
                   >
-                    <span className={formData.startTime ? "text-white" : "text-[#6A6A6A]"}>
+                    <span className={`truncate ${formData.startTime ? "text-white" : "text-[#6A6A6A]"}`}>
                       {formatDateTimeForDisplay(formData.startTime)}
                     </span>
-                    <IconCalendar size={16} className="text-[#6A6A6A]" />
+                    <IconCalendar size={16} className="text-[#6A6A6A] flex-shrink-0 ml-2" />
                   </button>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="block text-white text-sm font-medium mb-2 flex items-center gap-2">
                     <IconCalendar size={16} />
                     End Date & Time
@@ -393,19 +387,19 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                   <button
                     type="button"
                     onClick={() => setIsEndTimePickerOpen(true)}
-                    className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-left focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent transition-all duration-200 hover:bg-[#333333] flex items-center justify-between"
+                    className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-left focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent transition-all duration-200 hover:bg-[#333333] flex items-center justify-between min-w-0"
                   >
-                    <span className={formData.endTime ? "text-white" : "text-[#6A6A6A]"}>
+                    <span className={`truncate ${formData.endTime ? "text-white" : "text-[#6A6A6A]"}`}>
                       {formatDateTimeForDisplay(formData.endTime)}
                     </span>
-                    <IconCalendar size={16} className="text-[#6A6A6A]" />
+                    <IconCalendar size={16} className="text-[#6A6A6A] flex-shrink-0 ml-2" />
                   </button>
-                  {errors.endTime && <p className="text-red-400 text-sm mt-1">{errors.endTime}</p>}
+                  {errors.endTime && <p className="text-red-400 text-sm mt-1 break-words">{errors.endTime}</p>}
                 </div>
               </div>
 
               {/* Links */}
-              <div>
+              <div className="min-w-0">
                 <label className="block text-white text-sm font-medium mb-2 flex items-center gap-2">
                   <IconLink size={16} />
                   Links
@@ -416,12 +410,13 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                     value={currentLink}
                     onChange={(e) => setCurrentLink(e.target.value)}
                     placeholder="https://example.com"
-                    className="flex-1 px-4 py-2 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white placeholder-[#6A6A6A] focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent transition-all duration-200"
+                    className="flex-1 min-w-0 px-4 py-2 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white placeholder-[#6A6A6A] focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent transition-all duration-200"
+                    style={{ wordBreak: 'break-all', overflowWrap: 'break-word' }}
                   />
                   <button
                     type="button"
                     onClick={handleAddLink}
-                    className="px-4 py-2 bg-[#C8A2D6] text-black rounded-lg hover:bg-[#B892C6] transition-all duration-200 flex items-center gap-1"
+                    className="flex-shrink-0 px-4 py-2 bg-[#C8A2D6] text-black rounded-lg hover:bg-[#B892C6] transition-all duration-200 flex items-center gap-1"
                   >
                     <IconPlus size={16} />
                     Add
@@ -436,13 +431,19 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.2, delay: index * 0.05 }}
-                        className="flex items-center justify-between bg-[#2A2A2A] px-3 py-2 rounded-lg border border-[#3A3A3A]"
+                        className="flex items-center justify-between bg-[#2A2A2A] px-3 py-2 rounded-lg border border-[#3A3A3A] min-w-0"
                       >
-                        <span className="text-[#C8A2D6] text-sm truncate">{link}</span>
+                        <span 
+                          className="text-[#C8A2D6] text-sm truncate min-w-0 flex-1"
+                          style={{ wordBreak: 'break-all', overflowWrap: 'break-word' }}
+                          title={link}
+                        >
+                          {link}
+                        </span>
                         <button
                           type="button"
                           onClick={() => handleRemoveLink(index)}
-                          className="text-red-400 hover:text-red-300 p-1 rounded transition-colors"
+                          className="text-red-400 hover:text-red-300 p-1 rounded transition-colors flex-shrink-0 ml-2"
                         >
                           <IconTrash size={14} />
                         </button>
@@ -453,36 +454,28 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
               </div>
 
               {/* Color Picker */}
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">
-                  Color
-                </label>
-                <div className="flex gap-3 flex-wrap">
-                  {colorOptions.map((color) => (
-                    <motion.button
-                      key={color}
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, color }))}
-                      className={`w-10 h-10 rounded-xl border-2 transition-all duration-200 ${
-                        formData.color === color 
-                          ? 'border-white scale-110 shadow-lg' 
-                          : 'border-[#3A3A3A] hover:border-[#6A6A6A] hover:scale-105'
-                      }`}
-                      style={{ backgroundColor: color }}
-                      whileHover={{ scale: formData.color === color ? 1.1 : 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    />
-                  ))}
-                </div>
-              </div>
+              <ColorPicker
+                value={formData.color}
+                onChange={(color) => setFormData(prev => ({ ...prev, color }))}
+                presetColors={[
+                  "#C8A2D6", // Current purple
+                  "#FF6B6B", // Red
+                  "#4ECDC4", // Teal
+                  "#45B7D1", // Blue
+                  "#F9CA24", // Yellow
+                  "#6C5CE7", // Purple
+                  "#A0E7E5", // Light teal
+                  "#FEA47F", // Orange
+                ]}
+              />
 
               {errors.submit && (
                 <motion.div 
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-red-500/10 border border-red-500/20 rounded-lg p-3"
+                  className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 min-w-0"
                 >
-                  <p className="text-red-400 text-sm">{errors.submit}</p>
+                  <p className="text-red-400 text-sm break-words">{errors.submit}</p>
                 </motion.div>
               )}
 
@@ -491,13 +484,18 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-[#2A2A2A] rounded-lg p-4 border border-[#3A3A3A]"
+                  className="bg-[#2A2A2A] rounded-lg p-4 border border-[#3A3A3A] min-w-0"
                 >
                   <p className="text-[#6A6A6A] text-xs mb-3">Preview:</p>
-                  <div className="flex items-center space-x-3">
-                    <div className="w-5 h-5 rounded-md border border-[#424242]"></div>
-                    <span className="text-white text-sm font-medium">{formData.title}</span>
-                    <div className="flex items-center space-x-2 ml-auto">
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className="w-5 h-5 rounded-md border border-[#424242] flex-shrink-0"></div>
+                    <span 
+                      className="text-white text-sm font-medium truncate min-w-0 flex-1"
+                      title={formData.title}
+                    >
+                      {formData.title}
+                    </span>
+                    <div className="flex items-center space-x-2 flex-shrink-0">
                       {formData.priority === 'high' && <div className="w-2 h-2 rounded-full bg-red-500" title="High Priority" />}
                       {formData.priority === 'medium' && <div className="w-2 h-2 rounded-full bg-yellow-500" title="Medium Priority" />}
                       {formData.priority === 'low' && <div className="w-2 h-2 rounded-full bg-green-500" title="Low Priority" />}
@@ -508,7 +506,10 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                     </div>
                   </div>
                   {(isCustomCategory ? customCategoryName : formData.category) && (
-                    <p className="text-[#6A6A6A] text-xs mt-2">
+                    <p 
+                      className="text-[#6A6A6A] text-xs mt-2 break-words"
+                      style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
+                    >
                       Category: {isCustomCategory ? 
                         customCategoryName.charAt(0).toUpperCase() + customCategoryName.slice(1) : 
                         predefinedCategories.find(cat => cat.value === formData.category)?.label || formData.category
