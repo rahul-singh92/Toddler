@@ -1,6 +1,6 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import { IconX, IconCalendar, IconLink, IconPlus, IconTrash } from "@tabler/icons-react";
+import React, { useState, useEffect, useRef } from "react";
+import { IconX, IconCalendar, IconLink, IconPlus, IconTrash, IconEdit, IconChevronDown, IconCheck } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { addDoc, collection, Timestamp } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
@@ -24,6 +24,107 @@ const initialFormData: TodoFormData = {
   color: "#C8A2D6",
 };
 
+// Custom Dropdown Component
+interface CustomDropdownProps {
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  className?: string;
+}
+
+const CustomDropdown: React.FC<CustomDropdownProps> = ({ 
+  options, 
+  value, 
+  onChange, 
+  placeholder = "Select option...",
+  className = "" 
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectedOption = options.find(option => option.value === value);
+
+  const handleSelect = (optionValue: string) => {
+    onChange(optionValue);
+    setIsOpen(false);
+  };
+
+  return (
+    <div className={`relative ${className}`} ref={dropdownRef}>
+      {/* Dropdown Trigger */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent flex items-center justify-between transition-all duration-200 hover:bg-[#333333]"
+      >
+        <span className={selectedOption ? "text-white" : "text-[#6A6A6A]"}>
+          {selectedOption ? selectedOption.label : placeholder}
+        </span>
+        <motion.div
+          animate={{ rotate: isOpen ? 180 : 0 }}
+          transition={{ duration: 0.2, ease: "easeInOut" }}
+        >
+          <IconChevronDown size={16} className="text-[#6A6A6A]" />
+        </motion.div>
+      </button>
+
+      {/* Dropdown Menu */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="absolute top-full left-0 right-0 mt-2 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg shadow-2xl z-50 overflow-hidden"
+          >
+            <div className="max-h-60 overflow-y-auto">
+              {options.map((option, index) => (
+                <motion.button
+                  key={option.value}
+                  type="button"
+                  onClick={() => handleSelect(option.value)}
+                  className="w-full px-4 py-3 text-left text-white hover:bg-[#3A3A3A] transition-all duration-150 flex items-center justify-between group"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.15, delay: index * 0.03 }}
+                  whileHover={{ backgroundColor: "#3A3A3A" }}
+                >
+                  <span className={`${option.value === "custom" ? "text-[#C8A2D6]" : ""}`}>
+                    {option.label}
+                  </span>
+                  {value === option.value && (
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <IconCheck size={16} className="text-[#C8A2D6]" />
+                    </motion.div>
+                  )}
+                </motion.button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
 export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalProps) {
   const [user] = useAuthState(auth);
   const [formData, setFormData] = useState<TodoFormData>(initialFormData);
@@ -31,6 +132,33 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
   const [currentLink, setCurrentLink] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  // Custom category states
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategoryName, setCustomCategoryName] = useState("");
+
+  // Predefined categories
+  const predefinedCategories = [
+    { value: "personal", label: "Personal" },
+    { value: "work", label: "Work" },
+    { value: "study", label: "Study" },
+    { value: "health", label: "Health" },
+    { value: "hobby", label: "Hobby" },
+    { value: "finance", label: "Finance" },
+    { value: "shopping", label: "Shopping" },
+    { value: "travel", label: "Travel" },
+  ];
+
+  const categoryOptions = [
+    ...predefinedCategories,
+    { value: "custom", label: "+ Create Custom Category" }
+  ];
+
+  const priorityOptions = [
+    { value: "low", label: "Low" },
+    { value: "medium", label: "Medium" },
+    { value: "high", label: "High" },
+  ];
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -39,6 +167,8 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
       setLinksList([]);
       setCurrentLink("");
       setErrors({});
+      setIsCustomCategory(false);
+      setCustomCategoryName("");
     }
   }, [isOpen]);
 
@@ -47,6 +177,10 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
 
     if (!formData.title.trim()) {
       newErrors.title = "Title is required";
+    }
+
+    if (isCustomCategory && !customCategoryName.trim()) {
+      newErrors.category = "Custom category name is required";
     }
 
     if (formData.startTime && formData.endTime) {
@@ -61,7 +195,7 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -72,6 +206,43 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: "" }));
     }
+  };
+
+  const handleCategoryChange = (value: string) => {
+    if (value === "custom") {
+      setIsCustomCategory(true);
+      setFormData(prev => ({ ...prev, category: "" }));
+    } else {
+      setIsCustomCategory(false);
+      setCustomCategoryName("");
+      setFormData(prev => ({ ...prev, category: value }));
+    }
+
+    // Clear category error
+    if (errors.category) {
+      setErrors(prev => ({ ...prev, category: "" }));
+    }
+  };
+
+  const handlePriorityChange = (value: string) => {
+    setFormData(prev => ({ ...prev, priority: value as "low" | "medium" | "high" }));
+  };
+
+  const handleCustomCategoryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setCustomCategoryName(value);
+    setFormData(prev => ({ ...prev, category: value.toLowerCase().trim() }));
+    
+    // Clear category error
+    if (errors.category) {
+      setErrors(prev => ({ ...prev, category: "" }));
+    }
+  };
+
+  const switchBackToDropdown = () => {
+    setIsCustomCategory(false);
+    setCustomCategoryName("");
+    setFormData(prev => ({ ...prev, category: "personal" }));
   };
 
   const handleAddLink = () => {
@@ -98,10 +269,13 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
         type: 'none'
       };
 
+      // Use custom category name if it's a custom category
+      const categoryToSave = isCustomCategory ? customCategoryName.toLowerCase().trim() : formData.category;
+
       const todoData: Omit<Todo, 'id'> = {
         title: formData.title.trim(),
         description: formData.description.trim(),
-        category: formData.category,
+        category: categoryToSave,
         links: linksList,
         startTime: formData.startTime ? new Date(formData.startTime) : undefined,
         endTime: formData.endTime ? new Date(formData.endTime) : undefined,
@@ -191,7 +365,7 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                 name="title"
                 value={formData.title}
                 onChange={handleInputChange}
-                className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white placeholder-[#6A6A6A] focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent"
+                className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white placeholder-[#6A6A6A] focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent transition-all duration-200"
                 placeholder="Enter todo title..."
               />
               {errors.title && <p className="text-red-400 text-sm mt-1">{errors.title}</p>}
@@ -207,7 +381,7 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                 value={formData.description}
                 onChange={handleInputChange}
                 rows={3}
-                className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white placeholder-[#6A6A6A] focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent resize-none"
+                className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white placeholder-[#6A6A6A] focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent resize-none transition-all duration-200"
                 placeholder="Add a description..."
               />
             </div>
@@ -218,34 +392,59 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                 <label className="block text-white text-sm font-medium mb-2">
                   Category
                 </label>
-                <select
-                  name="category"
-                  value={formData.category}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent"
-                >
-                  <option value="personal">Personal</option>
-                  <option value="work">Work</option>
-                  <option value="study">Study</option>
-                  <option value="health">Health</option>
-                  <option value="hobby">Hobby</option>
-                </select>
+                
+                {!isCustomCategory ? (
+                  <CustomDropdown
+                    options={categoryOptions}
+                    value={formData.category}
+                    onChange={handleCategoryChange}
+                    placeholder="Select category..."
+                  />
+                ) : (
+                  // Custom category input
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={customCategoryName}
+                        onChange={handleCustomCategoryChange}
+                        placeholder="Enter custom category name..."
+                        className="flex-1 px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white placeholder-[#6A6A6A] focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent transition-all duration-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={switchBackToDropdown}
+                        className="px-3 py-3 bg-[#3A3A3A] text-[#BDBDBD] rounded-lg hover:bg-[#4A4A4A] transition-all duration-200"
+                        title="Switch back to predefined categories"
+                      >
+                        <IconEdit size={16} />
+                      </button>
+                    </div>
+                    {customCategoryName && (
+                      <motion.p 
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-[#C8A2D6] text-xs"
+                      >
+                        Preview: {customCategoryName.charAt(0).toUpperCase() + customCategoryName.slice(1)}
+                      </motion.p>
+                    )}
+                  </div>
+                )}
+                
+                {errors.category && <p className="text-red-400 text-sm mt-1">{errors.category}</p>}
               </div>
 
               <div>
                 <label className="block text-white text-sm font-medium mb-2">
                   Priority
                 </label>
-                <select
-                  name="priority"
+                <CustomDropdown
+                  options={priorityOptions}
                   value={formData.priority}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent"
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                </select>
+                  onChange={handlePriorityChange}
+                  placeholder="Select priority..."
+                />
               </div>
             </div>
 
@@ -261,7 +460,7 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                   name="startTime"
                   value={formData.startTime}
                   onChange={handleInputChange}
-                  className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent"
+                  className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent transition-all duration-200"
                 />
               </div>
 
@@ -275,7 +474,7 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                   name="endTime"
                   value={formData.endTime}
                   onChange={handleInputChange}
-                  className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent"
+                  className="w-full px-4 py-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent transition-all duration-200"
                 />
                 {errors.endTime && <p className="text-red-400 text-sm mt-1">{errors.endTime}</p>}
               </div>
@@ -293,12 +492,12 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                   value={currentLink}
                   onChange={(e) => setCurrentLink(e.target.value)}
                   placeholder="https://example.com"
-                  className="flex-1 px-4 py-2 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white placeholder-[#6A6A6A] focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent"
+                  className="flex-1 px-4 py-2 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg text-white placeholder-[#6A6A6A] focus:outline-none focus:ring-2 focus:ring-[#C8A2D6] focus:border-transparent transition-all duration-200"
                 />
                 <button
                   type="button"
                   onClick={handleAddLink}
-                  className="px-4 py-2 bg-[#C8A2D6] text-black rounded-lg hover:bg-[#B892C6] transition-colors flex items-center gap-1"
+                  className="px-4 py-2 bg-[#C8A2D6] text-black rounded-lg hover:bg-[#B892C6] transition-all duration-200 flex items-center gap-1"
                 >
                   <IconPlus size={16} />
                   Add
@@ -308,16 +507,22 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
               {linksList.length > 0 && (
                 <div className="space-y-2">
                   {linksList.map((link, index) => (
-                    <div key={index} className="flex items-center justify-between bg-[#2A2A2A] px-3 py-2 rounded-lg">
+                    <motion.div 
+                      key={index} 
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.2, delay: index * 0.05 }}
+                      className="flex items-center justify-between bg-[#2A2A2A] px-3 py-2 rounded-lg border border-[#3A3A3A]"
+                    >
                       <span className="text-[#C8A2D6] text-sm truncate">{link}</span>
                       <button
                         type="button"
                         onClick={() => handleRemoveLink(index)}
-                        className="text-red-400 hover:text-red-300 p-1"
+                        className="text-red-400 hover:text-red-300 p-1 rounded transition-colors"
                       >
                         <IconTrash size={14} />
                       </button>
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
               )}
@@ -328,27 +533,65 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
               <label className="block text-white text-sm font-medium mb-2">
                 Color
               </label>
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-3 flex-wrap">
                 {colorOptions.map((color) => (
-                  <button
+                  <motion.button
                     key={color}
                     type="button"
                     onClick={() => setFormData(prev => ({ ...prev, color }))}
-                    className={`w-8 h-8 rounded-lg border-2 transition-all ${
+                    className={`w-10 h-10 rounded-xl border-2 transition-all duration-200 ${
                       formData.color === color 
-                        ? 'border-white scale-110' 
-                        : 'border-[#3A3A3A] hover:border-[#6A6A6A]'
+                        ? 'border-white scale-110 shadow-lg' 
+                        : 'border-[#3A3A3A] hover:border-[#6A6A6A] hover:scale-105'
                     }`}
                     style={{ backgroundColor: color }}
+                    whileHover={{ scale: formData.color === color ? 1.1 : 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                   />
                 ))}
               </div>
             </div>
 
             {errors.submit && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-red-500/10 border border-red-500/20 rounded-lg p-3"
+              >
                 <p className="text-red-400 text-sm">{errors.submit}</p>
-              </div>
+              </motion.div>
+            )}
+
+            {/* Preview of todo being created */}
+            {formData.title && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-[#2A2A2A] rounded-lg p-4 border border-[#3A3A3A]"
+              >
+                <p className="text-[#6A6A6A] text-xs mb-3">Preview:</p>
+                <div className="flex items-center space-x-3">
+                  <div className="w-5 h-5 rounded-md border border-[#424242]"></div>
+                  <span className="text-white text-sm font-medium">{formData.title}</span>
+                  <div className="flex items-center space-x-2 ml-auto">
+                    {formData.priority === 'high' && <div className="w-2 h-2 rounded-full bg-red-500" title="High Priority" />}
+                    {formData.priority === 'medium' && <div className="w-2 h-2 rounded-full bg-yellow-500" title="Medium Priority" />}
+                    {formData.priority === 'low' && <div className="w-2 h-2 rounded-full bg-green-500" title="Low Priority" />}
+                    <div 
+                      className="w-3 h-3 rounded-full" 
+                      style={{ backgroundColor: formData.color }}
+                    />
+                  </div>
+                </div>
+                {(isCustomCategory ? customCategoryName : formData.category) && (
+                  <p className="text-[#6A6A6A] text-xs mt-2">
+                    Category: {isCustomCategory ? 
+                      customCategoryName.charAt(0).toUpperCase() + customCategoryName.slice(1) : 
+                      predefinedCategories.find(cat => cat.value === formData.category)?.label || formData.category
+                    }
+                  </p>
+                )}
+              </motion.div>
             )}
 
             {/* Actions */}
@@ -356,14 +599,14 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 px-4 py-3 bg-[#2A2A2A] text-[#BDBDBD] rounded-lg hover:bg-[#3A3A3A] transition-colors font-medium"
+                className="flex-1 px-4 py-3 bg-[#2A2A2A] text-[#BDBDBD] rounded-lg hover:bg-[#3A3A3A] transition-all duration-200 font-medium"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-1 px-4 py-3 bg-[#C8A2D6] text-black rounded-lg hover:bg-[#B892C6] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-3 bg-[#C8A2D6] text-black rounded-lg hover:bg-[#B892C6] transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? "Creating..." : "Create Todo"}
               </button>
