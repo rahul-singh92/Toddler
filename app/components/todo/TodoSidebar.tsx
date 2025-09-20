@@ -1,9 +1,14 @@
 "use client";
 import { useState, useEffect } from "react";
 import { IconPlus, IconMinus } from "@tabler/icons-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, Variants } from "framer-motion";
 import { Todo } from "../../types/todo";
-import TodoDetailsModal from "./TodoDetailsModal"; // Add this import
+import TodoDetailsModal from "./TodoDetailsModal";
+import TodoRemovalAnimation from "../ui/TodoRemovalAnimation";
+import { doc, updateDoc, setDoc, deleteDoc, collection, getDocs } from "firebase/firestore";
+import { db } from "../../lib/firebase";
+import { useAuthState } from "react-firebase-hooks/auth";
+import { auth } from "../../lib/firebase";
 
 interface TodoGroup {
   key: string;
@@ -25,18 +30,60 @@ export default function TodoSidebar({
   onAddTodo, 
   loading = false 
 }: TodoSidebarProps) {
+  const [user] = useAuthState(auth);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  
-  // Add these states for the details modal
   const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  
+  // State to track todos that are completing (for animation)
+  const [completingTodos, setCompletingTodos] = useState<Set<string>>(new Set());
+  const [removingTodos, setRemovingTodos] = useState<Set<string>>(new Set());
+  const [hiddenTodos, setHiddenTodos] = useState<Set<string>>(new Set());
+  
+  // Track completed recurring todos (by original ID)
+  const [completedRecurringTodos, setCompletedRecurringTodos] = useState<Set<string>>(new Set());
+
+  // Debug authentication state
+  useEffect(() => {
+    console.log("🔐 Auth State:", {
+      user: user ? {
+        uid: user.uid,
+        email: user.email,
+        emailVerified: user.emailVerified
+      } : null,
+      isLoading: loading
+    });
+  }, [user, loading]);
+
+  // Load completed recurring todos on component mount
+  useEffect(() => {
+    const loadCompletedRecurringTodos = async () => {
+      if (!user) return;
+      
+      try {
+        const completedRecurringRef = collection(db, 'users', user.uid, 'completedRecurring');
+        const snapshot = await getDocs(completedRecurringRef);
+        
+        const completed = new Set<string>();
+        snapshot.forEach(doc => {
+          completed.add(doc.data().originalTodoId);
+        });
+        
+        setCompletedRecurringTodos(completed);
+        console.log(`✅ Loaded ${completed.size} completed recurring todos`);
+      } catch (error) {
+        console.error("❌ Error loading completed recurring todos:", error);
+      }
+    };
+
+    loadCompletedRecurringTodos();
+  }, [user]);
 
   // Initialize collapsed state for all groups
   useEffect(() => {
     const initialCollapsed: Record<string, boolean> = {};
     groups.forEach(group => {
       if (!(group.key in collapsed)) {
-        // Show "This Week" expanded by default, others collapsed
         initialCollapsed[group.key] = group.key !== "thisWeek";
       }
     });
@@ -53,22 +100,273 @@ export default function TodoSidebar({
     }));
   };
 
-  // Add this function to handle todo clicks
-  const handleTodoClick = (todo: Todo, event: React.MouseEvent) => {
-    // Prevent checkbox click from triggering
-    if ((event.target as HTMLElement).closest('input[type="checkbox"]')) {
+  // Simplified todo completion handler - works with original IDs only
+  const handleTodoComplete = async (todo: Todo, completed: boolean) => {
+    // Check authentication first
+    if (!user) {
+      console.error("❌ User not authenticated");
+      alert("Please log in to complete todos");
       return;
     }
     
+    if (!todo.id) {
+      console.error("❌ Todo ID is missing");
+      return;
+    }
+
+    console.log("🔍 Debug Info:", {
+      user: user.uid,
+      todoId: todo.id,
+      completed,
+      userEmail: user.email,
+      isAuthenticated: !!user
+    });
+
+    // Always use the original todo ID (extract from instance ID if needed)
+    const originalTodoId = todo.id.includes('-') ? todo.id.split('-')[0] : todo.id;
+    const displayId = todo.id; // Keep display ID for UI state management
+    
+    console.log(`📋 Handling completion for todo: ${displayId}, original: ${originalTodoId}, completed: ${completed}`);
+
+    if (completed) {
+      // Mark as completing for animation (use display ID for UI state)
+      setCompletingTodos(prev => new Set([...prev, displayId]));
+      
+      try {
+        // Always work with the original todo document
+        const todoRef = doc(db, 'users', user.uid, 'todos', originalTodoId);
+        console.log(`📝 Firestore path: users/${user.uid}/todos/${originalTodoId}`);
+        
+        const updateData: any = {
+          completed: true,
+          completedAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        // If this is a recurring todo, end the recurrence today
+        if (todo.recurrence?.type !== 'none' && todo.recurrence?.type) {
+          const today = new Date();
+          updateData.recurrence = {
+            ...todo.recurrence,
+            endDate: today
+          };
+          console.log(`🔁 Stopping recurrence for "${todo.title}" - ending on ${today.toDateString()}`);
+          
+          // Track this as a completed recurring todo
+          const completedRecurringRef = doc(db, 'users', user.uid, 'completedRecurring', originalTodoId);
+          console.log(`📝 Creating completion record: users/${user.uid}/completedRecurring/${originalTodoId}`);
+          
+          await setDoc(completedRecurringRef, {
+            originalTodoId: originalTodoId,
+            todoTitle: todo.title,
+            completedAt: new Date(),
+            createdAt: new Date()
+          });
+          
+          setCompletedRecurringTodos(prev => new Set([...prev, originalTodoId]));
+          console.log("✅ Completion record created successfully");
+        }
+
+        // Update the original todo
+        console.log("📝 Updating original todo...");
+        await updateDoc(todoRef, updateData);
+        console.log(`✅ Successfully completed todo: "${todo.title}"`);
+
+        // Continue with animation
+        setTimeout(() => {
+          setRemovingTodos(prev => new Set([...prev, displayId]));
+          setCompletingTodos(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(displayId);
+            return newSet;
+          });
+
+          setTimeout(() => {
+            setRemovingTodos(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(displayId);
+              return newSet;
+            });
+            
+            setHiddenTodos(prev => new Set([...prev, displayId]));
+          }, 800);
+        }, 1000);
+      } catch (error: any) {
+        console.error("❌ Error completing todo:", error);
+        console.error("📋 Error details:", {
+          code: error?.code,
+          message: error?.message,
+          todoId: displayId,
+          originalId: originalTodoId,
+          userId: user.uid,
+          userEmail: user.email
+        });
+        
+        // Remove from completing set if error
+        setCompletingTodos(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(displayId);
+          return newSet;
+        });
+        
+        // Show detailed error message
+        alert(`Failed to complete todo: ${error?.message || 'Unknown error'}\nCode: ${error?.code || 'N/A'}`);
+      }
+    } else {
+      // Handle uncompleting - restore recurrence if needed
+      try {
+        const todoRef = doc(db, 'users', user.uid, 'todos', originalTodoId);
+        console.log(`📝 Uncompleting todo: users/${user.uid}/todos/${originalTodoId}`);
+        
+        const updateData: any = {
+          completed: false,
+          updatedAt: new Date()
+        };
+
+        // If this was a recurring todo, restore the recurrence
+        if (todo.recurrence?.type !== 'none' && todo.recurrence?.type) {
+          updateData.recurrence = {
+            ...todo.recurrence,
+            endDate: null // Remove the end date to restore recurrence
+          };
+          console.log(`🔁 Restored recurrence for "${todo.title}"`);
+          
+          // Remove from completed recurring todos
+          const completedRecurringRef = doc(db, 'users', user.uid, 'completedRecurring', originalTodoId);
+          await deleteDoc(completedRecurringRef);
+          
+          setCompletedRecurringTodos(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(originalTodoId);
+            return newSet;
+          });
+          console.log("✅ Completion record removed successfully");
+        }
+
+        await updateDoc(todoRef, updateData);
+        console.log(`✅ Successfully uncompleted todo: "${todo.title}"`);
+        
+        setHiddenTodos(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(displayId);
+          return newSet;
+        });
+      } catch (error: any) {
+        console.error("❌ Error uncompleting todo:", error);
+        alert(`Failed to uncomplete todo: ${error?.message || 'Unknown error'}\nCode: ${error?.code || 'N/A'}`);
+      }
+    }
+  };
+
+  // Handle checkbox click separately from todo click
+  const handleCheckboxClick = (todo: Todo, event: React.ChangeEvent<HTMLInputElement>) => {
+    event.stopPropagation();
+    if (!todo.id) {
+      console.error("Todo ID is missing");
+      return;
+    }
+    handleTodoComplete(todo, event.target.checked);
+  };
+
+  const handleTodoClick = (todo: Todo) => {
     setSelectedTodo(todo);
     setIsDetailsModalOpen(true);
   };
 
-  // Add this function to close the details modal
+  const handleLabelClick = (event: React.MouseEvent) => {
+    event.stopPropagation();
+  };
+
   const handleCloseDetailsModal = () => {
     setIsDetailsModalOpen(false);
     setSelectedTodo(null);
   };
+
+  // Enhanced filtering logic that separates recurring todos from date-based groups
+  const getFilteredTodos = (todos: Todo[], groupKey: string, isDateBased: boolean = false) => {
+    const seenOriginalIds = new Set<string>();
+    
+    return todos.filter(todo => {
+      if (!todo.id) return false;
+      
+      // Get the original ID (for both regular and recurring todos)
+      const originalId = todo.id.includes('-') ? todo.id.split('-')[0] : todo.id;
+      
+      // For date-based groups (This Week, This Month), exclude recurring todos
+      if (isDateBased) {
+        const isRecurring = todo.recurrence?.type !== 'none' || todo.id.includes('-');
+        if (isRecurring) {
+          return false; // Don't show recurring todos in date-based groups
+        }
+      } else {
+        // For category-based groups, show only one instance of each recurring todo
+        if (seenOriginalIds.has(originalId)) {
+          return false;
+        }
+        seenOriginalIds.add(originalId);
+      }
+      
+      // Hide if todo is completed or this recurring todo was completed
+      if (todo.completed || completedRecurringTodos.has(originalId)) {
+        return false;
+      }
+      
+      return !hiddenTodos.has(todo.id) && !removingTodos.has(todo.id);
+    });
+  };
+
+  // Check if there are any visible todos across all groups
+  const hasVisibleTodos = groups.some(group => 
+    getFilteredTodos(group.todos, group.key, group.isDateBased).length > 0
+  );
+
+  // Animation variants
+  const particleVariants: Variants = {
+    initial: { 
+      scale: 1, 
+      opacity: 1, 
+      rotate: 0 
+    },
+    completing: {
+      scale: [1, 1.1, 1],
+      opacity: [1, 0.8, 1],
+      transition: {
+        duration: 0.5,
+        ease: "easeInOut",
+        repeat: 1,
+        repeatType: "loop"
+      }
+    },
+    exploding: {
+      scale: [1, 1.2, 0],
+      opacity: [1, 1, 0],
+      rotate: [0, 10, -10, 180],
+      y: [-5, -20, 0],
+      transition: {
+        duration: 0.8,
+        ease: "easeOut"
+      }
+    }
+  };
+
+  // Show login prompt if not authenticated
+  if (!user && !loading) {
+    return (
+      <motion.aside
+        initial={false}
+        animate={{ x: sidebarCollapsed ? -288 : 0 }}
+        transition={{ duration: 0.3, ease: "easeInOut" }}
+        className="fixed left-20 top-0 h-screen w-72 bg-black flex flex-col z-10 shadow-lg overflow-hidden"
+      >
+        <div className="flex items-center justify-center h-full p-5">
+          <div className="text-white text-center">
+            <p className="mb-2">Please log in</p>
+            <p className="text-sm text-gray-400">to view your todos</p>
+          </div>
+        </div>
+      </motion.aside>
+    );
+  }
 
   if (loading) {
     return (
@@ -108,112 +406,184 @@ export default function TodoSidebar({
 
         {/* Scrollable Todo Groups Container with Custom Scrollbar */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 pt-3 sidebar-custom-scrollbar">
-          {groups.length === 0 ? (
+          {groups.length === 0 || !hasVisibleTodos ? (
             <div className="flex flex-col items-center justify-center h-40">
               <div className="text-[#6A6A6A] text-center">
-                <p className="mb-2">No todos yet</p>
-                <p className="text-sm">Click the + button to create your first todo</p>
+                <p className="mb-2">
+                  {groups.length === 0 ? "No todos yet" : "No todos present"}
+                </p>
+                <p className="text-sm">Click the + button to create your todo</p>
               </div>
             </div>
           ) : (
             <div className="space-y-2">
-              {groups.map((group) => (
-                <div key={group.key} className="mb-2">
-                  <div className="bg-[#151515] rounded-lg overflow-hidden">
-                    <button
-                      className="w-full flex justify-between items-center px-3 py-2 font-medium hover:bg-[#1f1f1f] transition text-left"
-                      onClick={() => toggleGroup(group.key)}
-                    >
-                      <div className="flex items-center space-x-2 min-w-0 flex-1">
-                        <span className={`truncate ${collapsed[group.key] ? "text-[#BDBDBD]" : "text-[#C8A2D6]"}`}>
-                          {group.title}
-                        </span>
-                        <span className="text-[#6A6A6A] text-sm flex-shrink-0">({group.todos.length})</span>
-                      </div>
+              {groups.map((group) => {
+                const filteredTodos = getFilteredTodos(group.todos, group.key, group.isDateBased);
+                
+                if (filteredTodos.length === 0) return null;
+                
+                return (
+                  <div key={group.key} className="mb-2">
+                    <div className="bg-[#151515] rounded-lg overflow-hidden">
+                      <button
+                        className="w-full flex justify-between items-center px-3 py-2 font-medium hover:bg-[#1f1f1f] transition text-left"
+                        onClick={() => toggleGroup(group.key)}
+                      >
+                        <div className="flex items-center space-x-2 min-w-0 flex-1">
+                          <span className={`truncate ${collapsed[group.key] ? "text-[#BDBDBD]" : "text-[#C8A2D6]"}`}>
+                            {group.title}
+                          </span>
+                          <span className="text-[#6A6A6A] text-sm flex-shrink-0">({filteredTodos.length})</span>
+                        </div>
 
-                      <div className="flex-shrink-0 ml-2">
-                        {collapsed[group.key] ? (
-                          <IconPlus size={16} className="text-[#6A6A6A]" />
-                        ) : (
-                          <IconMinus size={16} className="text-[#6A6A6A]" />
-                        )}
-                      </div>
-                    </button>
+                        <div className="flex-shrink-0 ml-2">
+                          {collapsed[group.key] ? (
+                            <IconPlus size={16} className="text-[#6A6A6A]" />
+                          ) : (
+                            <IconMinus size={16} className="text-[#6A6A6A]" />
+                          )}
+                        </div>
+                      </button>
 
-                    <AnimatePresence>
-                      {!collapsed[group.key] && (
-                        <motion.div
-                          className="overflow-hidden"
-                          initial={{ opacity: 0, height: 0 }} 
-                          animate={{ opacity: 1, height: "auto" }} 
-                          exit={{ opacity: 0, height: 0 }} 
-                          transition={{ duration: 0.3, ease: "easeInOut" }}
-                        >
-                          <ul className="p-3 space-y-2">
-                            {group.todos.map((todo, i) => (
-                              <motion.li
-                                key={todo.id}
-                                className="flex items-center space-x-2 px-2 py-1 rounded-md hover:bg-[#1f1f1f] transition-colors duration-200 cursor-pointer"
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                                transition={{ duration: 0.25, delay: i * 0.07 }}
-                                onClick={(e) => handleTodoClick(todo, e)} // Add click handler
-                              >
-                                <label className="relative flex items-center cursor-pointer flex-shrink-0">
-                                  <input 
-                                    type="checkbox" 
-                                    className="peer hidden" 
-                                    defaultChecked={todo.completed}
-                                    onChange={(e) => {
-                                      // TODO: Update todo completion status in Firestore
-                                      console.log("Todo completion toggled:", todo.id, e.target.checked);
-                                    }}
-                                  />
-                                  <span className="w-5 h-5 rounded-md border border-[#424242] flex items-center justify-center transition-colors peer-checked:bg-[#C8A2D6] peer-checked:border-[#C8A2D6]">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-white hidden peer-checked:block" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                  </span>
-                                </label>
-
-                                <div className="flex-1 flex items-center justify-between min-w-0">
-                                  <span 
-                                    className={`text-white text-sm truncate ${todo.completed ? 'line-through opacity-60' : ''}`}
-                                    title={todo.description || todo.title}
-                                  >
-                                    {todo.title}
-                                  </span>
+                      <AnimatePresence>
+                        {!collapsed[group.key] && (
+                          <motion.div
+                            className="overflow-hidden"
+                            initial={{ opacity: 0, height: 0 }} 
+                            animate={{ opacity: 1, height: "auto" }} 
+                            exit={{ opacity: 0, height: 0 }} 
+                            transition={{ duration: 0.3, ease: "easeInOut" }}
+                          >
+                            <ul className="p-3 space-y-2">
+                              <AnimatePresence mode="popLayout">
+                                {filteredTodos.map((todo, i) => {
+                                  if (!todo.id) return null;
                                   
-                                  {/* Priority indicator */}
-                                  <div className="flex items-center space-x-1 flex-shrink-0 ml-2">
-                                    {todo.priority === 'high' && (
-                                      <div className="w-2 h-2 rounded-full bg-red-500" title="High Priority" />
-                                    )}
-                                    {todo.priority === 'medium' && (
-                                      <div className="w-2 h-2 rounded-full bg-yellow-500" title="Medium Priority" />
-                                    )}
-                                    {todo.priority === 'low' && (
-                                      <div className="w-2 h-2 rounded-full bg-green-500" title="Low Priority" />
-                                    )}
-                                    
-                                    {/* Color indicator */}
-                                    <div 
-                                      className="w-3 h-3 rounded-full flex-shrink-0" 
-                                      style={{ backgroundColor: todo.color }}
-                                      title={`Category: ${todo.category}`}
-                                    />
-                                  </div>
-                                </div>
-                              </motion.li>
-                            ))}
-                          </ul>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                                  const isCompleting = completingTodos.has(todo.id);
+                                  const isRemoving = removingTodos.has(todo.id);
+                                  const isRecurring = todo.recurrence?.type !== 'none' || todo.id.includes('-');
+                                  
+                                  return (
+                                    <motion.li
+                                      key={todo.id}
+                                      className="relative flex items-center space-x-2 px-2 py-1 rounded-md hover:bg-[#1f1f1f] transition-colors duration-200"
+                                      variants={particleVariants}
+                                      initial="initial"
+                                      animate={
+                                        isRemoving ? "exploding" : 
+                                        isCompleting ? "completing" : "initial"
+                                      }
+                                      exit={{
+                                        opacity: 0,
+                                        scale: 0.8,
+                                        height: 0,
+                                        marginBottom: 0,
+                                        transition: { duration: 0.3 }
+                                      }}
+                                      layout
+                                    >
+                                      <TodoRemovalAnimation 
+                                        isVisible={isRemoving}
+                                        color={todo.color || '#C8A2D6'}
+                                        particleCount={8}
+                                        type="particles"
+                                      />
+                                      
+                                      {/* Checkbox */}
+                                      <label 
+                                        className="relative flex items-center cursor-pointer flex-shrink-0"
+                                        onClick={handleLabelClick}
+                                      >
+                                        <input 
+                                          type="checkbox" 
+                                          className="peer hidden" 
+                                          checked={isCompleting}
+                                          onChange={(e) => handleCheckboxClick(todo, e)}
+                                          disabled={isCompleting || isRemoving}
+                                        />
+                                        <motion.span 
+                                          className="w-5 h-5 rounded-md border border-[#424242] flex items-center justify-center transition-colors peer-checked:bg-[#C8A2D6] peer-checked:border-[#C8A2D6]"
+                                          animate={isCompleting ? {
+                                            scale: [1, 1.2, 1],
+                                            borderColor: ["#424242", "#C8A2D6", "#C8A2D6"]
+                                          } : {}}
+                                          transition={{ duration: 0.3 }}
+                                        >
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-white hidden peer-checked:block" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                          </svg>
+                                        </motion.span>
+                                      </label>
+
+                                      {/* Todo Content */}
+                                      <div 
+                                        className="flex-1 flex items-center justify-between min-w-0 cursor-pointer"
+                                        onClick={() => handleTodoClick(todo)}
+                                      >
+                                        <motion.span 
+                                          className={`text-white text-sm truncate ${
+                                            isCompleting ? 'line-through opacity-60' : ''
+                                          }`}
+                                          title={todo.description || todo.title}
+                                          animate={isCompleting ? {
+                                            opacity: [1, 0.6],
+                                            color: ["#ffffff", "#888888"]
+                                          } : {}}
+                                          transition={{ duration: 0.5 }}
+                                        >
+                                          {todo.title}
+                                          {/* Show recurrence indicator only for recurring todos */}
+                                          {isRecurring && (
+                                            <span className="ml-2 text-xs text-[#8B5CF6] opacity-70" title="Recurring Todo">
+                                              🔁
+                                            </span>
+                                          )}
+                                        </motion.span>
+                                        
+                                        {/* Indicators */}
+                                        <div className="flex items-center space-x-1 flex-shrink-0 ml-2">
+                                          {todo.priority === 'high' && (
+                                            <div className="w-2 h-2 rounded-full bg-red-500" title="High Priority" />
+                                          )}
+                                          {todo.priority === 'medium' && (
+                                            <div className="w-2 h-2 rounded-full bg-yellow-500" title="Medium Priority" />
+                                          )}
+                                          {todo.priority === 'low' && (
+                                            <div className="w-2 h-2 rounded-full bg-green-500" title="Low Priority" />
+                                          )}
+                                          
+                                          <div 
+                                            className="w-3 h-3 rounded-full flex-shrink-0" 
+                                            style={{ backgroundColor: todo.color }}
+                                            title={`Category: ${todo.category}`}
+                                          />
+                                        </div>
+                                      </div>
+
+                                      {/* Success Indicator */}
+                                      {isCompleting && (
+                                        <motion.div
+                                          className="absolute -right-1 -top-1 w-3 h-3 bg-green-500 rounded-full"
+                                          initial={{ scale: 0, opacity: 0 }}
+                                          animate={{ 
+                                            scale: [0, 1.2, 1],
+                                            opacity: [0, 1, 1]
+                                          }}
+                                          transition={{ duration: 0.5, delay: 0.2 }}
+                                        />
+                                      )}
+                                    </motion.li>
+                                  );
+                                })}
+                              </AnimatePresence>
+                            </ul>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -252,7 +622,6 @@ export default function TodoSidebar({
         `}</style>
       </motion.aside>
 
-      {/* Todo Details Modal */}
       <TodoDetailsModal
         isOpen={isDetailsModalOpen}
         onClose={handleCloseDetailsModal}
