@@ -231,17 +231,28 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
   };
 
   const formatDateTimeForDisplay = (dateTimeString: string) => {
-    if (!dateTimeString) return "Select date & time";
-    const date = new Date(dateTimeString);
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-  };
+  if (!dateTimeString) return "Select date & time";
+  
+  // If it's already in the format "Sep 21, 2025, 9:00 AM", just return it
+  if (dateTimeString.includes('AM') || dateTimeString.includes('PM')) {
+    return dateTimeString;
+  }
+  
+  // Otherwise, try to parse as Date and format to 12-hour
+  const date = new Date(dateTimeString);
+  if (isNaN(date.getTime())) return dateTimeString;
+  
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+};
+
+
 
   const formatRecurrenceEndDateForDisplay = (dateTimeString?: string | Date) => {
     if (!dateTimeString) return "Select end date (optional)";
