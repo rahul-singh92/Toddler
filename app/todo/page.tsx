@@ -223,15 +223,15 @@ export default function TodoPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="flex">
+        <div className="flex min-h-screen overflow-hidden">
           <LeftSidebar onToggleSidebar={() => setSidebarCollapsed((s) => !s)} />
           <motion.aside
             initial={false}
             animate={{ x: sidebarCollapsed ? -288 : 0 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="fixed left-20 top-0 h-screen w-72 bg-black p-5 flex flex-col overflow-y-auto z-10 shadow-lg"
+            className="fixed left-20 top-0 h-screen w-72 bg-black flex flex-col z-10 shadow-lg overflow-hidden"
           >
-            <div className="flex items-center justify-center h-full">
+            <div className="flex items-center justify-center h-full p-5">
               <div className="text-white">Loading todos...</div>
             </div>
           </motion.aside>
@@ -239,7 +239,7 @@ export default function TodoPage() {
             initial={false} 
             animate={{ marginLeft: sidebarCollapsed ? "5rem" : "23rem" }} 
             transition={{ duration: 0.3, ease: "easeInOut" }} 
-            className="flex-1"
+            className="flex-1 overflow-x-hidden"
           >
             <HeaderBar />
             <div className="p-6">
@@ -253,7 +253,7 @@ export default function TodoPage() {
 
   return (
     <ProtectedRoute>
-      <div className="flex">
+      <div className="flex min-h-screen overflow-hidden">
         {/* LEFT SIDEBAR */}
         <LeftSidebar onToggleSidebar={() => setSidebarCollapsed((s) => !s)} />
 
@@ -262,125 +262,131 @@ export default function TodoPage() {
           initial={false}
           animate={{ x: sidebarCollapsed ? -288 : 0 }}
           transition={{ duration: 0.3, ease: "easeInOut" }}
-          className="fixed left-20 top-0 h-screen w-72 bg-black p-5 flex flex-col overflow-y-auto z-10 shadow-lg"
+          className="fixed left-20 top-0 h-screen w-72 bg-black flex flex-col z-10 shadow-lg overflow-hidden"
         >
-          {/* Sidebar header */}
-          <div className="flex items-center justify-between mb-6">
+          {/* Fixed Sidebar header */}
+          <div className="flex-shrink-0 flex items-center justify-between p-5">
             <h2 className="text-white text-3xl font-medium tracking-wide">Todos</h2>
             <button 
               onClick={() => setIsModalOpen(true)}
               aria-label="Add Todo" 
-              className="w-9 h-9 bg-[#252525] rounded-md flex items-center justify-center text-white shadow-sm hover:bg-[#1f1f1f] transition-colors" 
+              className="w-9 h-9 bg-[#252525] rounded-md flex items-center justify-center text-white shadow-sm hover:bg-[#1f1f1f] transition-colors flex-shrink-0" 
               type="button"
             >
               <IconPlus size={16} className="text-white" stroke={1.5} />
             </button>
           </div>
 
-          {/* Todo Groups */}
-          {groups.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-40">
-              <div className="text-[#6A6A6A] text-center">
-                <p className="mb-2">No todos yet</p>
-                <p className="text-sm">Click the + button to create your first todo</p>
-              </div>
-            </div>
-          ) : (
-            groups.map((group) => (
-              <div key={group.key} className="mb-2">
-                <div className="bg-[#151515] rounded-lg overflow-hidden">
-                  <button
-                    className="w-full flex justify-between items-center px-3 py-2 font-medium hover:bg-[#1f1f1f] transition"
-                    onClick={() => toggleGroup(group.key)}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <span className={collapsed[group.key] ? "text-[#BDBDBD]" : "text-[#C8A2D6]"}>
-                        {group.title}
-                      </span>
-                      <span className="text-[#6A6A6A] text-sm">({group.todos.length})</span>
-                    </div>
-
-                    <div>
-                      {collapsed[group.key] ? (
-                        <IconPlus size={16} className="text-[#6A6A6A]" />
-                      ) : (
-                        <IconMinus size={16} className="text-[#6A6A6A]" />
-                      )}
-                    </div>
-                  </button>
-
-                  <AnimatePresence>
-                    {!collapsed[group.key] && (
-                      <motion.ul 
-                        className="p-3 space-y-2" 
-                        initial={{ opacity: 0, height: 0 }} 
-                        animate={{ opacity: 1, height: "auto" }} 
-                        exit={{ opacity: 0, height: 0 }} 
-                        transition={{ duration: 0.3, ease: "easeInOut" }}
-                      >
-                        {group.todos.map((todo, i) => (
-                          <motion.li
-                            key={todo.id}
-                            className="flex items-center space-x-2 px-2 py-1 rounded-md hover:bg-[#1f1f1f] transition-colors duration-200"
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: -20 }}
-                            transition={{ duration: 0.25, delay: i * 0.07 }}
-                          >
-                            <label className="relative flex items-center cursor-pointer">
-                              <input 
-                                type="checkbox" 
-                                className="peer hidden" 
-                                defaultChecked={todo.completed}
-                                onChange={(e) => {
-                                  // TODO: Update todo completion status in Firestore
-                                  console.log("Todo completion toggled:", todo.id, e.target.checked);
-                                }}
-                              />
-                              <span className="w-5 h-5 rounded-md border border-[#424242] flex items-center justify-center transition-colors peer-checked:bg-[#C8A2D6] peer-checked:border-[#C8A2D6]">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-white hidden peer-checked:block" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
-                              </span>
-                            </label>
-
-                            <div className="flex-1 flex items-center justify-between">
-                              <span 
-                                className={`text-white text-sm ${todo.completed ? 'line-through opacity-60' : ''}`}
-                                title={todo.description}
-                              >
-                                {todo.title}
-                              </span>
-                              
-                              {/* Priority indicator */}
-                              <div className="flex items-center space-x-1">
-                                {todo.priority === 'high' && (
-                                  <div className="w-2 h-2 rounded-full bg-red-500" title="High Priority" />
-                                )}
-                                {todo.priority === 'medium' && (
-                                  <div className="w-2 h-2 rounded-full bg-yellow-500" title="Medium Priority" />
-                                )}
-                                {todo.priority === 'low' && (
-                                  <div className="w-2 h-2 rounded-full bg-green-500" title="Low Priority" />
-                                )}
-                                
-                                {/* Color indicator */}
-                                <div 
-                                  className="w-3 h-3 rounded-full flex-shrink-0" 
-                                  style={{ backgroundColor: todo.color }}
-                                  title={`Category: ${todo.category}`}
-                                />
-                              </div>
-                            </div>
-                          </motion.li>
-                        ))}
-                      </motion.ul>
-                    )}
-                  </AnimatePresence>
+          {/* Scrollable Todo Groups Container */}
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 pt-3">
+            {groups.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40">
+                <div className="text-[#6A6A6A] text-center">
+                  <p className="mb-2">No todos yet</p>
+                  <p className="text-sm">Click the + button to create your first todo</p>
                 </div>
               </div>
-            ))
-          )}
+            ) : (
+              <div className="space-y-2">
+                {groups.map((group) => (
+                  <div key={group.key} className="mb-2">
+                    <div className="bg-[#151515] rounded-lg overflow-hidden">
+                      <button
+                        className="w-full flex justify-between items-center px-3 py-2 font-medium hover:bg-[#1f1f1f] transition text-left"
+                        onClick={() => toggleGroup(group.key)}
+                      >
+                        <div className="flex items-center space-x-2 min-w-0 flex-1">
+                          <span className={`truncate ${collapsed[group.key] ? "text-[#BDBDBD]" : "text-[#C8A2D6]"}`}>
+                            {group.title}
+                          </span>
+                          <span className="text-[#6A6A6A] text-sm flex-shrink-0">({group.todos.length})</span>
+                        </div>
+
+                        <div className="flex-shrink-0 ml-2">
+                          {collapsed[group.key] ? (
+                            <IconPlus size={16} className="text-[#6A6A6A]" />
+                          ) : (
+                            <IconMinus size={16} className="text-[#6A6A6A]" />
+                          )}
+                        </div>
+                      </button>
+
+                      <AnimatePresence>
+                        {!collapsed[group.key] && (
+                          <motion.div
+                            className="overflow-hidden"
+                            initial={{ opacity: 0, height: 0 }} 
+                            animate={{ opacity: 1, height: "auto" }} 
+                            exit={{ opacity: 0, height: 0 }} 
+                            transition={{ duration: 0.3, ease: "easeInOut" }}
+                          >
+                            <ul className="p-3 space-y-2">
+                              {group.todos.map((todo, i) => (
+                                <motion.li
+                                  key={todo.id}
+                                  className="flex items-center space-x-2 px-2 py-1 rounded-md hover:bg-[#1f1f1f] transition-colors duration-200"
+                                  initial={{ opacity: 0, x: -20 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  exit={{ opacity: 0, x: -20 }}
+                                  transition={{ duration: 0.25, delay: i * 0.07 }}
+                                >
+                                  <label className="relative flex items-center cursor-pointer flex-shrink-0">
+                                    <input 
+                                      type="checkbox" 
+                                      className="peer hidden" 
+                                      defaultChecked={todo.completed}
+                                      onChange={(e) => {
+                                        // TODO: Update todo completion status in Firestore
+                                        console.log("Todo completion toggled:", todo.id, e.target.checked);
+                                      }}
+                                    />
+                                    <span className="w-5 h-5 rounded-md border border-[#424242] flex items-center justify-center transition-colors peer-checked:bg-[#C8A2D6] peer-checked:border-[#C8A2D6]">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-white hidden peer-checked:block" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    </span>
+                                  </label>
+
+                                  <div className="flex-1 flex items-center justify-between min-w-0">
+                                    <span 
+                                      className={`text-white text-sm truncate ${todo.completed ? 'line-through opacity-60' : ''}`}
+                                      title={todo.description || todo.title}
+                                    >
+                                      {todo.title}
+                                    </span>
+                                    
+                                    {/* Priority indicator */}
+                                    <div className="flex items-center space-x-1 flex-shrink-0 ml-2">
+                                      {todo.priority === 'high' && (
+                                        <div className="w-2 h-2 rounded-full bg-red-500" title="High Priority" />
+                                      )}
+                                      {todo.priority === 'medium' && (
+                                        <div className="w-2 h-2 rounded-full bg-yellow-500" title="Medium Priority" />
+                                      )}
+                                      {todo.priority === 'low' && (
+                                        <div className="w-2 h-2 rounded-full bg-green-500" title="Low Priority" />
+                                      )}
+                                      
+                                      {/* Color indicator */}
+                                      <div 
+                                        className="w-3 h-3 rounded-full flex-shrink-0" 
+                                        style={{ backgroundColor: todo.color }}
+                                        title={`Category: ${todo.category}`}
+                                      />
+                                    </div>
+                                  </div>
+                                </motion.li>
+                              ))}
+                            </ul>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </motion.aside>
 
         {/* Main content area */}
@@ -388,7 +394,7 @@ export default function TodoPage() {
           initial={false} 
           animate={{ marginLeft: sidebarCollapsed ? "5rem" : "23rem" }} 
           transition={{ duration: 0.3, ease: "easeInOut" }} 
-          className="flex-1"
+          className="flex-1 overflow-x-hidden"
         >
           {/* Fixed top header */}
           <HeaderBar />
@@ -433,12 +439,12 @@ export default function TodoPage() {
                   {todos.slice(0, 5).map(todo => (
                     <div key={todo.id} className="p-4 bg-white rounded-lg shadow-sm border">
                       <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h4 className="font-medium text-gray-900">{todo.title}</h4>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-gray-900 truncate">{todo.title}</h4>
                           {todo.description && (
-                            <p className="text-gray-600 text-sm mt-1">{todo.description}</p>
+                            <p className="text-gray-600 text-sm mt-1 line-clamp-2">{todo.description}</p>
                           )}
-                          <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                          <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 flex-wrap">
                             <span className="capitalize">Category: {todo.category}</span>
                             <span className="capitalize">Priority: {todo.priority}</span>
                             <span>Created: {todo.createdAt.toLocaleDateString()}</span>
@@ -452,7 +458,7 @@ export default function TodoPage() {
                             </div>
                           )}
                         </div>
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2 flex-shrink-0 ml-4">
                           {todo.completed && (
                             <span className="text-green-600 text-xs font-medium">✓ Done</span>
                           )}
