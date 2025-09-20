@@ -6,7 +6,7 @@ import TodoModal from "../components/TodoModal";
 import TodoSidebar from "../components/todo/TodoSidebar";
 import TodoDetailsModal from "../components/todo/TodoDetailsModal";
 import { IconChevronLeft, IconChevronRight, IconRepeat } from "@tabler/icons-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Todo } from "../types/todo";
 import { collection, query, onSnapshot, orderBy } from "firebase/firestore";
 import { useAuthState } from "react-firebase-hooks/auth";
@@ -88,7 +88,47 @@ function generateRecurringDates(todo: Todo, viewStartDate: Date, viewEndDate: Da
   return dates;
 }
 
-// Helper function to check if a date is in this week
+// Helper function to check if two todos overlap in time
+function todosOverlap(todo1: Todo, todo2: Todo): boolean {
+  if (!todo1.startTime || !todo2.startTime) return false;
+  
+  const start1 = todo1.startTime.getTime();
+  const end1 = todo1.endTime ? todo1.endTime.getTime() : start1 + (60 * 60 * 1000); // Default 1 hour
+  const start2 = todo2.startTime.getTime();
+  const end2 = todo2.endTime ? todo2.endTime.getTime() : start2 + (60 * 60 * 1000); // Default 1 hour
+  
+  return start1 < end2 && start2 < end1;
+}
+
+// Helper function to group overlapping todos
+function groupOverlappingTodos(todos: Todo[]): Todo[][] {
+  const groups: Todo[][] = [];
+  const processed = new Set<string>();
+  
+  todos.forEach(todo => {
+    if (!todo.id || processed.has(todo.id)) return;
+    
+    const overlappingGroup = [todo];
+    processed.add(todo.id);
+    
+    todos.forEach(otherTodo => {
+      if (otherTodo.id && otherTodo.id !== todo.id && !processed.has(otherTodo.id)) {
+        // Check if this todo overlaps with any todo in the current group
+        const overlapsWithGroup = overlappingGroup.some(groupTodo => todosOverlap(groupTodo, otherTodo));
+        if (overlapsWithGroup) {
+          overlappingGroup.push(otherTodo);
+          processed.add(otherTodo.id);
+        }
+      }
+    });
+    
+    groups.push(overlappingGroup);
+  });
+  
+  return groups;
+}
+
+// Helper functions for checking dates and weeks
 function isThisWeek(date: Date): boolean {
   const today = new Date();
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -102,14 +142,12 @@ function isThisWeek(date: Date): boolean {
   return date >= mondayStart && date <= sundayEnd;
 }
 
-// Helper function to check if a date is on the same day
 function isSameDay(date1: Date, date2: Date): boolean {
   return date1.getDate() === date2.getDate() &&
          date1.getMonth() === date2.getMonth() &&
          date1.getFullYear() === date2.getFullYear();
 }
 
-// Helper function to check if a date is in this month
 function isThisMonth(date: Date): boolean {
   const today = new Date();
   return date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
@@ -179,8 +217,24 @@ interface TodoGroup {
   isDateBased?: boolean;
 }
 
-// Minimal Todo card component with full background color
-function TodoCard({ todo, onClick, instanceDate }: { todo: Todo; onClick: () => void; instanceDate?: Date }) {
+// Individual Todo Card Component - FIXED STACKING
+function TodoCard({ 
+  todo, 
+  onClick, 
+  instanceDate, 
+  stackIndex = 0, 
+  isStacked = false, 
+  isExpanded = false,
+  totalInStack = 1
+}: { 
+  todo: Todo; 
+  onClick: () => void; 
+  instanceDate?: Date;
+  stackIndex?: number;
+  isStacked?: boolean;
+  isExpanded?: boolean;
+  totalInStack?: number;
+}) {
   const formatTime = (date?: Date) => {
     if (!date) return '';
     return date.toLocaleTimeString('en-US', { 
@@ -208,14 +262,98 @@ function TodoCard({ todo, onClick, instanceDate }: { todo: Todo; onClick: () => 
   const textColor = isLightColor(todo.color) ? '#000000' : '#FFFFFF';
   const timeColor = isLightColor(todo.color) ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.8)';
 
+  // Calculate duration and positioning
+  const calculateTimeSpan = () => {
+    if (!todo.startTime || !todo.endTime) {
+      return { height: 'auto', marginBottom: '8px' }; // Regular height for todos without end time
+    }
+
+    const startHour = todo.startTime.getHours();
+    const endHour = todo.endTime.getHours();
+    const startMinutes = todo.startTime.getMinutes();
+    const endMinutes = todo.endTime.getMinutes();
+
+    // Convert to decimal hours
+    const startDecimal = startHour + startMinutes / 60;
+    const endDecimal = endHour + endMinutes / 60;
+    
+    // Calculate duration in hours
+    const durationHours = endDecimal - startDecimal;
+    
+    // Each hour slot is 64px (h-16 = 4rem = 64px) + 16px gap (space-y-4)
+    const pixelsPerHour = 64 + 16; // 80px total per hour
+    const totalHeight = durationHours * pixelsPerHour - 16; // Subtract gap for last item
+    
+    return {
+      height: `${Math.max(totalHeight, 64)}px`, // Minimum height of one slot
+      marginBottom: '0px' // No margin since it spans multiple slots
+    };
+  };
+
+  const timeSpan = calculateTimeSpan();
+
+  // FIXED: Better stack positioning - cards stack directly on top with small gaps
+  const getStackStyles = () => {
+    if (!isStacked) return {};
+    
+    if (isExpanded) {
+      // Fan-out positioning when expanded - spread horizontally
+      const fanDistance = (stackIndex - (totalInStack - 1) / 2) * 120; // Center the fan
+      const fanAngle = (stackIndex - (totalInStack - 1) / 2) * 8; // Subtle rotation
+      
+      return {
+        transform: `translateX(${fanDistance}px) rotate(${fanAngle}deg)`,
+        transformOrigin: 'center bottom',
+        zIndex: 60 + stackIndex,
+        scale: 1.02 // Slightly larger when expanded
+      };
+    }
+    
+    // FIXED: Stack positioning - cards directly on top with minimal offset
+    const stackOffset = stackIndex * 3; // Very small 3px offset to show edges
+    const depthOffset = stackIndex * -1; // Slight depth effect
+    
+    return {
+      transform: `translateX(${stackOffset}px) translateY(${depthOffset}px)`,
+      zIndex: 20 + stackIndex,
+      marginTop: stackIndex === 0 ? '0px' : '-60px' // Overlap the cards but show small gap
+    };
+  };
+
+  const stackStyles = getStackStyles();
+
   return (
-    <div 
-      className="p-3 rounded-lg shadow-sm hover:shadow-lg transition-all duration-200 cursor-pointer relative overflow-hidden"
+    <motion.div 
+      layout
+      initial={false}
+      animate={{
+        ...stackStyles,
+        scale: isExpanded ? (stackStyles.scale || 1.02) : 1
+      }}
+      transition={{ 
+        type: "spring", 
+        stiffness: 400, 
+        damping: 30,
+        duration: 0.3
+      }}
+      className="p-3 rounded-lg shadow-md hover:shadow-xl transition-all duration-200 cursor-pointer relative overflow-hidden"
       style={{ 
-        backgroundColor: todo.color
+        backgroundColor: todo.color,
+        height: timeSpan.height,
+        marginBottom: timeSpan.marginBottom,
+        zIndex: stackStyles.zIndex,
+        transform: stackStyles.transform,
+        marginTop: stackStyles.marginTop
       }}
       onClick={onClick}
     >
+      {/* Stack indicator - show count on top card */}
+      {isStacked && stackIndex === totalInStack - 1 && totalInStack > 1 && !isExpanded && (
+        <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gray-800 text-white text-xs flex items-center justify-center font-bold shadow-lg">
+          {totalInStack}
+        </div>
+      )}
+
       {/* Recurring indicator */}
       {todo.recurrence?.type !== 'none' && (
         <div className="absolute top-2 right-2">
@@ -224,7 +362,7 @@ function TodoCard({ todo, onClick, instanceDate }: { todo: Todo; onClick: () => 
       )}
 
       {/* Main content */}
-      <div>
+      <div className="h-full flex flex-col">
         {/* Title */}
         <h4 
           className="font-semibold text-sm mb-1 pr-4" 
@@ -236,14 +374,21 @@ function TodoCard({ todo, onClick, instanceDate }: { todo: Todo; onClick: () => 
           {todo.title}
         </h4>
         
-        {/* Start Time */}
-        {displayTime && (
-          <p 
-            className="text-xs font-medium" 
+        {/* Time range */}
+        <div className="text-xs font-medium mb-2" style={{ color: timeColor }}>
+          {displayTime && formatTime(displayTime)}
+          {todo.endTime && todo.startTime && ` - ${formatTime(todo.endTime)}`}
+        </div>
+
+        {/* Description for longer events (only show on top card or when expanded) */}
+        {todo.description && timeSpan.height !== 'auto' && parseInt(timeSpan.height) > 100 && 
+         (stackIndex === totalInStack - 1 || isExpanded) && (
+          <div 
+            className="text-xs opacity-75 flex-1 overflow-hidden"
             style={{ color: timeColor }}
           >
-            {formatTime(displayTime)}
-          </p>
+            {todo.description}
+          </div>
         )}
 
         {/* Completion indicator - small dot */}
@@ -256,6 +401,52 @@ function TodoCard({ todo, onClick, instanceDate }: { todo: Todo; onClick: () => 
           />
         )}
       </div>
+    </motion.div>
+  );
+}
+
+// FIXED: Stacked Todo Cards Component - Proper layered stacking
+function StackedTodoCards({ todos, onTodoClick }: { todos: Todo[]; onTodoClick: (todo: Todo) => void }) {
+  const [isHovered, setIsHovered] = useState(false);
+  
+  if (todos.length === 1) {
+    return (
+      <TodoCard 
+        todo={todos[0]} 
+        onClick={() => onTodoClick(todos[0])}
+        instanceDate={todos[0].startTime}
+      />
+    );
+  }
+
+  // Sort todos by priority and creation time for consistent stacking order
+  const sortedTodos = [...todos].sort((a, b) => {
+    const priorityOrder = { high: 3, medium: 2, low: 1 };
+    const aPriority = priorityOrder[a.priority as keyof typeof priorityOrder] || 1;
+    const bPriority = priorityOrder[b.priority as keyof typeof priorityOrder] || 1;
+    
+    if (aPriority !== bPriority) return aPriority - bPriority; // Lower priority first (bottom of stack)
+    return a.createdAt.getTime() - b.createdAt.getTime(); // Older first
+  });
+
+  return (
+    <div 
+      className="relative"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {sortedTodos.map((todo, index) => (
+        <TodoCard
+          key={todo.id}
+          todo={todo}
+          onClick={() => onTodoClick(todo)}
+          instanceDate={todo.startTime}
+          stackIndex={index}
+          isStacked={true}
+          isExpanded={isHovered}
+          totalInStack={sortedTodos.length}
+        />
+      ))}
     </div>
   );
 }
@@ -422,7 +613,7 @@ export default function TodoPage() {
 
   const groups = getGroupedTodos();
 
-  // Get todos for a specific date - WITH RECURRENCE EXPANSION
+  // Get todos for a specific date - MODIFIED FOR STACKING
   const getTodosForDate = (date: Date): Todo[] => {
     const result: Todo[] = [];
     const viewStartDate = new Date(Math.min(...currentWeekDates.map(d => d.getTime())));
@@ -555,9 +746,9 @@ export default function TodoPage() {
                 const dayTodos = getTodosForDate(date);
                 
                 return (
-                  <div key={index} className="space-y-4">
+                  <div key={index} className="relative">
                     {/* All day events */}
-                    <div className="min-h-[80px] space-y-2">
+                    <div className="min-h-[80px] space-y-2 mb-4">
                       {dayTodos
                         .filter(todo => !todo.startTime || todo.startTime.getHours() === 0)
                         .map(todo => (
@@ -569,33 +760,54 @@ export default function TodoPage() {
                         ))}
                     </div>
 
-                    {/* Time slot events - Extended range 6 AM to 11 PM */}
-                    <div className="space-y-4">
-                      {Array.from({ length: 17 }, (_, hourIndex) => {
-                        const hour = hourIndex + 6; // Start from 6 AM
-                        const hourTodos = dayTodos.filter(todo => 
-                          todo.startTime && todo.startTime.getHours() === hour
-                        );
+                    {/* Time slot events - MODIFIED FOR STACKING */}
+                    <div className="relative" style={{ minHeight: '17 * 80px' }}>
+                      {/* Group overlapping todos and render stacks */}
+                      {(() => {
+                        const timedTodos = dayTodos.filter(todo => todo.startTime && todo.startTime.getHours() > 0);
+                        const overlappingGroups = groupOverlappingTodos(timedTodos);
                         
-                        return (
-                          <div key={hour} className="min-h-[64px] relative">
-                            {hourTodos.length > 0 && (
-                              <div className="space-y-2">
-                                {hourTodos.map(todo => (
-                                  <TodoCard 
-                                    key={todo.id} 
-                                    todo={todo} 
-                                    onClick={() => handleTodoClick(todo)}
-                                    instanceDate={todo.startTime}
-                                  />
-                                ))}
-                              </div>
-                            )}
-                            {/* Time slot grid line */}
-                            <div className="absolute inset-0 border-t border-gray-100 pointer-events-none"></div>
-                          </div>
-                        );
-                      })}
+                        return overlappingGroups.map((todoGroup, groupIndex) => {
+                          const firstTodo = todoGroup[0];
+                          const startHour = firstTodo.startTime!.getHours();
+                          const startMinutes = firstTodo.startTime!.getMinutes();
+                          
+                          // Calculate position from 6 AM (our start time)
+                          const hoursFromStart = startHour - 6;
+                          const minutesFromStart = startMinutes;
+                          
+                          // Each hour slot is 80px (64px height + 16px gap)
+                          const topOffset = (hoursFromStart * 80) + (minutesFromStart / 60 * 80);
+                          
+                          return (
+                            <div
+                              key={`group-${groupIndex}`}
+                              className="absolute w-full"
+                              style={{ 
+                                top: `${Math.max(topOffset, 0)}px`,
+                                zIndex: 10 + groupIndex
+                              }}
+                            >
+                              <StackedTodoCards 
+                                todos={todoGroup}
+                                onTodoClick={handleTodoClick}
+                              />
+                            </div>
+                          );
+                        });
+                      })()}
+
+                      {/* Background grid lines */}
+                      {Array.from({ length: 17 }, (_, hourIndex) => (
+                        <div 
+                          key={hourIndex} 
+                          className="absolute w-full border-t border-gray-100 pointer-events-none"
+                          style={{ 
+                            top: `${hourIndex * 80}px`,
+                            height: '64px'
+                          }}
+                        />
+                      ))}
                     </div>
                   </div>
                 );
