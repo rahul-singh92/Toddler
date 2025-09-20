@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { IconX, IconChevronLeft, IconChevronRight, IconChevronDown } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "framer-motion";
 import CustomDropdown from "./CustomDropdown";
+import styles from "./ModernDateTimePicker.module.css";
 
 interface ModernDateTimePickerProps {
   isOpen: boolean;
@@ -215,7 +216,7 @@ const ModernDateTimePicker: React.FC<ModernDateTimePickerProps> = ({
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, y: 20 }}
-          className="relative bg-[#1A1A1A] rounded-2xl p-5 w-full max-w-sm border border-[#2A2A2A] shadow-2xl max-h-[85vh] overflow-y-auto"
+          className={`relative bg-[#1A1A1A] rounded-2xl p-5 w-full max-w-sm border border-[#2A2A2A] shadow-2xl max-h-[85vh] overflow-y-auto ${styles.customScrollbar}`}
         >
           {/* Header - Compact */}
           <div className="flex items-center justify-between mb-4">
@@ -258,7 +259,7 @@ const ModernDateTimePicker: React.FC<ModernDateTimePickerProps> = ({
                         initial={{ opacity: 0, y: -10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                        className="absolute top-full left-0 mt-1 bg-[#2A2A2A] border border-[#3A3A3A] rounded-xl shadow-2xl z-50 w-32 max-h-48 overflow-y-auto"
+                        className={`absolute top-full left-0 mt-1 bg-[#2A2A2A] border border-[#3A3A3A] rounded-xl shadow-2xl z-50 w-32 max-h-48 overflow-y-auto ${styles.customScrollbarSmall}`}
                       >
                         <div className="p-1">
                           {months.map((month, index) => (
@@ -299,7 +300,7 @@ const ModernDateTimePicker: React.FC<ModernDateTimePickerProps> = ({
                         initial={{ opacity: 0, y: -10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                        className="absolute top-full right-0 mt-1 bg-[#2A2A2A] border border-[#3A3A3A] rounded-xl shadow-2xl z-50 w-20 max-h-48 overflow-y-auto"
+                        className={`absolute top-full right-0 mt-1 bg-[#2A2A2A] border border-[#3A3A3A] rounded-xl shadow-2xl z-50 w-20 max-h-48 overflow-y-auto ${styles.customScrollbarSmall}`}
                       >
                         <div className="p-1">
                           {generateYears().map((year) => (

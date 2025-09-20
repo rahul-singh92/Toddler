@@ -1,0 +1,62 @@
+/* ModernDateTimePicker.module.css */
+
+/* Main scrollbar for the modal */
+.customScrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.customScrollbar::-webkit-scrollbar-track {
+  background: #2A2A2A;
+  border-radius: 4px;
+  margin: 8px 0;
+}
+
+.customScrollbar::-webkit-scrollbar-thumb {
+  background: #4A4A4A;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.customScrollbar::-webkit-scrollbar-thumb:hover {
+  background: #C8A2D6;
+}
+
+.customScrollbar::-webkit-scrollbar-thumb:active {
+  background: #B892C6;
+}
+
+/* Smaller scrollbar for dropdown menus */
+.customScrollbarSmall::-webkit-scrollbar {
+  width: 6px;
+}
+
+.customScrollbarSmall::-webkit-scrollbar-track {
+  background: #3A3A3A;
+  border-radius: 3px;
+  margin: 4px 0;
+}
+
+.customScrollbarSmall::-webkit-scrollbar-thumb {
+  background: #5A5A5A;
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+.customScrollbarSmall::-webkit-scrollbar-thumb:hover {
+  background: #C8A2D6;
+}
+
+.customScrollbarSmall::-webkit-scrollbar-thumb:active {
+  background: #B892C6;
+}
+
+/* For Firefox */
+.customScrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #4A4A4A #2A2A2A;
+}
+
+.customScrollbarSmall {
+  scrollbar-width: thin;
+  scrollbar-color: #5A5A5A #3A3A3A;
+}

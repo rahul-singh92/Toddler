@@ -272,8 +272,8 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
               </button>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[calc(90vh-120px)] overflow-y-auto">
+            {/* Form with Custom Scrollbar */}
+            <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[calc(90vh-120px)] overflow-y-auto custom-scrollbar">
               {/* Title */}
               <div>
                 <label className="block text-white text-sm font-medium mb-2">
@@ -556,6 +556,39 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
         title="Select End Date & Time"
         initialValue={formData.endTime}
       />
+
+      {/* Custom Scrollbar Styles */}
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #2A2A2A;
+          border-radius: 4px;
+          margin: 8px 0;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #4A4A4A;
+          border-radius: 4px;
+          transition: background 0.2s ease;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #C8A2D6;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb:active {
+          background: #B892C6;
+        }
+        
+        /* For Firefox */
+        .custom-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: #4A4A4A #2A2A2A;
+        }
+      `}</style>
     </>
   );
 }
