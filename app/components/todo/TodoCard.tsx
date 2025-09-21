@@ -13,7 +13,7 @@ import { auth } from "../../lib/firebase";
 interface TodoCardProps {
   todo: Todo;
   onClick: () => void;
-  onDelete?: (todo: Todo) => void; // Optional callback for parent to handle deletion
+  onDelete?: (todo: Todo) => void;
   instanceDate?: Date;
   stackIndex?: number;
   isStacked?: boolean;
@@ -33,6 +33,10 @@ export default function TodoCard({
 }: TodoCardProps) {
   const [user] = useAuthState(auth);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Manual drag state management
+  const [isDragging, setIsDragging] = useState(false);
+  const [isOverTrash, setIsOverTrash] = useState(false);
 
   // Handle todo deletion from Firestore
   const handleTodoDelete = async (todoToDelete: Todo) => {
@@ -41,7 +45,6 @@ export default function TodoCard({
       return;
     }
 
-    // Extract original todo ID (in case it's a recurring instance)
     const originalTodoId = todoToDelete.id.includes('-') 
       ? todoToDelete.id.split('-')[0] 
       : todoToDelete.id;
@@ -51,18 +54,15 @@ export default function TodoCard({
     setIsDeleting(true);
 
     try {
-      // Delete the original todo document
       const todoRef = doc(db, 'users', user.uid, 'todos', originalTodoId);
       await deleteDoc(todoRef);
 
       console.log(`✅ Successfully deleted todo: "${todoToDelete.title}"`);
 
-      // Call parent deletion callback if provided
       if (onDelete) {
         onDelete(todoToDelete);
       }
 
-      // Small delay for smooth animation
       setTimeout(() => {
         setIsDeleting(false);
       }, 500);
@@ -74,19 +74,6 @@ export default function TodoCard({
     }
   };
 
-  // Use the drag-to-delete hook
-  const {
-    isDragging,
-    isOverTrash,
-    handleDragStart,
-    handleDragEnd,
-    handleDragOver,
-    handleDragLeave,
-    handleDrop
-  } = useDragToDelete<Todo>({
-    onDelete: handleTodoDelete
-  });
-
   const formatTime = (date?: Date) => {
     if (!date) return '';
     return date.toLocaleTimeString('en-US', { 
@@ -96,25 +83,19 @@ export default function TodoCard({
     });
   };
 
-  // Function to determine if the background color is light or dark
   const isLightColor = (hex: string) => {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
     const b = parseInt(hex.slice(5, 7), 16);
     
-    // Calculate luminance
     const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
     return luminance > 0.5;
   };
 
-  // Use instanceDate for display if provided (for recurring todos)
   const displayTime = instanceDate || todo.startTime;
-
-  // Determine text color based on background
   const textColor = isLightColor(todo.color) ? '#000000' : '#FFFFFF';
   const timeColor = isLightColor(todo.color) ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.8)';
 
-  // Calculate duration and positioning
   const calculateTimeSpan = () => {
     if (!todo.startTime || !todo.endTime) {
       return { height: 'auto', marginBottom: '8px' };
@@ -125,31 +106,26 @@ export default function TodoCard({
     const startMinutes = todo.startTime.getMinutes();
     const endMinutes = todo.endTime.getMinutes();
 
-    // Convert to decimal hours
     const startDecimal = startHour + startMinutes / 60;
     const endDecimal = endHour + endMinutes / 60;
     
-    // Calculate duration in hours
     const durationHours = endDecimal - startDecimal;
     
-    // Each hour slot is 64px (h-16 = 4rem = 64px) + 16px gap (space-y-4)
     const pixelsPerHour = 64 + 16; // 80px total per hour
-    const totalHeight = durationHours * pixelsPerHour - 16; // Subtract gap for last item
+    const totalHeight = durationHours * pixelsPerHour - 16;
     
     return {
-      height: `${Math.max(totalHeight, 64)}px`, // Minimum height of one slot
-      marginBottom: '0px' // No margin since it spans multiple slots
+      height: `${Math.max(totalHeight, 64)}px`,
+      marginBottom: '0px'
     };
   };
 
   const timeSpan = calculateTimeSpan();
 
-  // Stack positioning logic
   const getStackStyles = () => {
     if (!isStacked) return {};
     
     if (isExpanded) {
-      // Fan-out positioning when expanded - spread horizontally
       const fanDistance = (stackIndex - (totalInStack - 1) / 2) * 120;
       const fanAngle = (stackIndex - (totalInStack - 1) / 2) * 8;
       
@@ -161,7 +137,6 @@ export default function TodoCard({
       };
     }
     
-    // Stack positioning - cards directly on top with minimal offset
     const stackOffset = stackIndex * 3;
     const depthOffset = stackIndex * -1;
     
@@ -174,10 +149,111 @@ export default function TodoCard({
 
   const stackStyles = getStackStyles();
 
-  // Handle card click (prevent modal from opening during drag)
   const handleCardClick = () => {
     if (isDragging) return;
     onClick();
+  };
+
+  // Custom drag start handler that creates card-like drag image
+  const createCardDragImage = () => {
+    const dragImage = document.createElement('div');
+    const cardHeight = timeSpan.height === 'auto' ? 64 : Math.min(parseInt(timeSpan.height), 120);
+    const cardWidth = 180;
+
+    dragImage.style.cssText = `
+      position: absolute;
+      top: -2000px;
+      left: -2000px;
+      width: ${cardWidth}px;
+      height: ${cardHeight}px;
+      padding: 12px;
+      background: ${todo.color};
+      border-radius: 8px;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.1);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      z-index: 10000;
+      transform: rotate(2deg) scale(0.95);
+      overflow: hidden;
+    `;
+
+    dragImage.innerHTML = `
+      <div style="height: 100%; display: flex; flex-direction: column; position: relative;">
+        ${todo.recurrence?.type !== 'none' ? `<div style="position: absolute; top: 0; right: 0; font-size: 8px; opacity: 0.7;">🔁</div>` : ''}
+        <div style="position: absolute; top: 4px; left: 4px; display: flex; gap: 2px; opacity: 0.5;">
+          <div style="width: 3px; height: 3px; border-radius: 50%; background: ${timeColor};"></div>
+          <div style="width: 3px; height: 3px; border-radius: 50%; background: ${timeColor};"></div>
+          <div style="width: 3px; height: 3px; border-radius: 50%; background: ${timeColor};"></div>
+        </div>
+        <div style="font-size: 14px; font-weight: 600; color: ${textColor}; line-height: 1.2; margin: 12px 12px 4px 12px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
+          ${todo.title}
+        </div>
+        ${displayTime ? `<div style="font-size: 11px; font-weight: 500; color: ${timeColor}; margin: 0 12px 4px 12px;">
+          ${formatTime(displayTime)}${todo.endTime && todo.startTime ? ` - ${formatTime(todo.endTime)}` : ''}
+        </div>` : ''}
+        ${todo.description && cardHeight > 80 ? `<div style="font-size: 11px; color: ${timeColor}; opacity: 0.75; margin: 0 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
+          ${todo.description}
+        </div>` : ''}
+        ${todo.completed ? `<div style="position: absolute; bottom: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: ${isLightColor(todo.color) ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.8)'};"></div>` : ''}
+      </div>
+    `;
+
+    return dragImage;
+  };
+
+  // Manual drag event handlers
+  const handleCustomDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!todo.id || isDeleting) return;
+
+    console.log('🎯 Custom drag start called');
+
+    // Set drag data
+    e.dataTransfer.setData('text/plain', todo.id);
+    e.dataTransfer.effectAllowed = 'move';
+
+    // Create and set custom drag image SYNCHRONOUSLY
+    const dragImage = createCardDragImage();
+    document.body.appendChild(dragImage);
+    e.dataTransfer.setDragImage(dragImage, dragImage.offsetWidth / 2, dragImage.offsetHeight / 2);
+    
+    // Clean up drag image
+    setTimeout(() => {
+      if (document.body.contains(dragImage)) {
+        document.body.removeChild(dragImage);
+      }
+    }, 0);
+
+    // Set dragging state
+    setIsDragging(true);
+    console.log('🔥 Drag state set to true');
+  };
+
+  const handleCustomDragEnd = () => {
+    console.log('🏁 Drag end called');
+    setIsDragging(false);
+    setIsOverTrash(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsOverTrash(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsOverTrash(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    console.log('💧 Drop detected');
+    
+    setIsOverTrash(false);
+    setIsDragging(false);
+    
+    // Delete the todo
+    if (todo) {
+      handleTodoDelete(todo);
+    }
   };
 
   return (
@@ -220,12 +296,8 @@ export default function TodoCard({
         {/* Draggable div inside motion wrapper */}
         <div
           draggable={!!todo.id && !isDeleting}
-          onDragStart={(e: React.DragEvent<HTMLDivElement>) => {
-            if (todo.id && !isDeleting) {
-              handleDragStart(e, todo, todo.id);
-            }
-          }}
-          onDragEnd={handleDragEnd}
+          onDragStart={handleCustomDragStart}
+          onDragEnd={handleCustomDragEnd}
           className={`
             h-full w-full p-3 rounded-lg shadow-md transition-all duration-200 relative overflow-hidden
             ${(!isDeleting && !!todo.id) 
