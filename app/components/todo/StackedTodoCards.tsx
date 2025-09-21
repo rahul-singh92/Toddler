@@ -6,9 +6,14 @@ import TodoCard from "./TodoCard";
 interface StackedTodoCardsProps {
   todos: Todo[];
   onTodoClick: (todo: Todo) => void;
+  onTodoContextMenu?: (event: React.MouseEvent, todo: Todo) => void; // ✅ ADD THIS
 }
 
-export default function StackedTodoCards({ todos, onTodoClick }: StackedTodoCardsProps) {
+export default function StackedTodoCards({ 
+  todos, 
+  onTodoClick, 
+  onTodoContextMenu // ✅ ADD THIS
+}: StackedTodoCardsProps) {
   const [isHovered, setIsHovered] = useState(false);
   
   if (todos.length === 1) {
@@ -16,6 +21,7 @@ export default function StackedTodoCards({ todos, onTodoClick }: StackedTodoCard
       <TodoCard 
         todo={todos[0]} 
         onClick={() => onTodoClick(todos[0])}
+        onContextMenu={onTodoContextMenu} // ✅ ADD THIS
         instanceDate={todos[0].startTime}
       />
     );
@@ -42,6 +48,7 @@ export default function StackedTodoCards({ todos, onTodoClick }: StackedTodoCard
           key={todo.id}
           todo={todo}
           onClick={() => onTodoClick(todo)}
+          onContextMenu={onTodoContextMenu} // ✅ ADD THIS
           instanceDate={todo.startTime}
           stackIndex={index}
           isStacked={true}

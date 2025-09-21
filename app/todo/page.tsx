@@ -5,12 +5,13 @@ import LeftSidebar from "../components/LeftSidebar";
 import TodoModal from "../components/TodoModal";
 import TodoSidebar from "../components/todo/TodoSidebar";
 import TodoDetailsModal from "../components/todo/TodoDetailsModal";
+import TodoContextMenu from "../components/todo/TodoContextMenu";
 import StackedTodoCards from "../components/todo/StackedTodoCards";
 import TodoCard from "../components/todo/TodoCard";
 import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
 import { motion } from "framer-motion";
 import { Todo } from "../types/todo";
-import { collection, query, onSnapshot, orderBy } from "firebase/firestore";
+import { collection, query, onSnapshot, orderBy, doc, deleteDoc } from "firebase/firestore";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "../lib/firebase";
 import { 
@@ -114,9 +115,20 @@ export default function TodoPage() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // ✅ ADD THESE EDIT FUNCTIONALITY STATES
+  // Edit functionality states
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+
+  // ✅ ADD CALENDAR CONTEXT MENU STATE
+  const [calendarContextMenu, setCalendarContextMenu] = useState<{
+    isVisible: boolean;
+    position: { x: number; y: number };
+    todo: Todo | null;
+  }>({
+    isVisible: false,
+    position: { x: 0, y: 0 },
+    todo: null
+  });
   
   // Scroll container refs for synchronization
   const headerScrollRef = useRef<HTMLDivElement>(null);
@@ -337,7 +349,6 @@ export default function TodoPage() {
     setIsDetailsModalOpen(true);
   };
 
-  // ✅ ADD THESE EDIT HANDLER FUNCTIONS
   // Handle edit todo (called from context menu)
   const handleEditTodo = (todo: Todo) => {
     console.log("✏️ Edit todo requested:", todo.title);
@@ -363,6 +374,50 @@ export default function TodoPage() {
   const handleCloseDetailsModal = () => {
     setIsDetailsModalOpen(false);
     setSelectedTodo(null);
+  };
+
+  // ✅ ADD CALENDAR CONTEXT MENU HANDLERS
+  const handleCalendarTodoRightClick = (event: React.MouseEvent, todo: Todo) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    // Close any existing context menu first
+    setCalendarContextMenu({ isVisible: false, position: { x: 0, y: 0 }, todo: null });
+
+    // Small delay to prevent flickering
+    setTimeout(() => {
+      setCalendarContextMenu({
+        isVisible: true,
+        position: { x: event.clientX, y: event.clientY },
+        todo: todo
+      });
+    }, 10);
+  };
+
+  const handleCloseCalendarContextMenu = () => {
+    setCalendarContextMenu({ isVisible: false, position: { x: 0, y: 0 }, todo: null });
+  };
+
+  // ✅ HANDLE DELETE FOR CALENDAR TODOS
+  const handleCalendarTodoDelete = async (todo: Todo) => {
+    if (!user || !todo.id) {
+      console.error("❌ User not authenticated or todo.id is missing");
+      return;
+    }
+
+    const originalTodoId = todo.id.includes('-') ? todo.id.split('-')[0] : todo.id;
+
+    try {
+      const todoRef = doc(db, 'users', user.uid, 'todos', originalTodoId);
+      await deleteDoc(todoRef);
+      console.log(`✅ Successfully deleted todo: "${todo.title}"`);
+      
+      // Close context menu
+      handleCloseCalendarContextMenu();
+    } catch (error: any) {
+      console.error("❌ Error deleting todo:", error);
+      alert(`Failed to delete todo: ${error?.message || 'Unknown error'}`);
+    }
   };
 
   // Group todos dynamically with recurrence expansion
@@ -497,12 +552,12 @@ export default function TodoPage() {
         {/* LEFT SIDEBAR */}
         <LeftSidebar onToggleSidebar={() => setSidebarCollapsed((s) => !s)} />
 
-        {/* TODO SIDEBAR - ✅ ADD THE onEditTodo PROP */}
+        {/* TODO SIDEBAR */}
         <TodoSidebar
           sidebarCollapsed={sidebarCollapsed}
           groups={groups}
           onAddTodo={() => setIsModalOpen(true)}
-          onEditTodo={handleEditTodo} // ✅ ADD THIS LINE
+          onEditTodo={handleEditTodo}
           loading={loading}
         />
 
@@ -604,6 +659,7 @@ export default function TodoPage() {
                                 key={todo.id} 
                                 todo={todo} 
                                 onClick={() => handleTodoClick(todo)}
+                                onContextMenu={handleCalendarTodoRightClick} // ✅ ADD THIS
                                 onDelete={(deletedTodo) => {
                                   console.log('Card deleted:', deletedTodo.title);
                                   // Real-time listener will handle the update
@@ -639,6 +695,7 @@ export default function TodoPage() {
                                   <StackedTodoCards 
                                     todos={todoGroup}
                                     onTodoClick={handleTodoClick}
+                                    onTodoContextMenu={handleCalendarTodoRightClick} // ✅ ADD THIS
                                   />
                                 </div>
                               );
@@ -666,7 +723,6 @@ export default function TodoPage() {
           </div>
         </motion.main>
 
-        {/* ✅ ADD THE EDIT MODAL */}
         {/* Create New Todo Modal */}
         <TodoModal 
           isOpen={isModalOpen}
@@ -679,13 +735,23 @@ export default function TodoPage() {
           isOpen={isEditModalOpen}
           onClose={handleCloseEditModal}
           onTodoAdded={handleTodoUpdated}
-          editingTodo={editingTodo} // Pass the todo to edit
+          editingTodo={editingTodo}
         />
 
         <TodoDetailsModal
           isOpen={isDetailsModalOpen}
           onClose={handleCloseDetailsModal}
           todo={selectedTodo}
+        />
+
+        {/* ✅ ADD CALENDAR CONTEXT MENU */}
+        <TodoContextMenu
+          isVisible={calendarContextMenu.isVisible}
+          position={calendarContextMenu.position}
+          todo={calendarContextMenu.todo}
+          onEdit={handleEditTodo}
+          onDelete={handleCalendarTodoDelete}
+          onClose={handleCloseCalendarContextMenu}
         />
       </div>
 

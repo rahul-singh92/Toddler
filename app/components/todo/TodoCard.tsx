@@ -4,7 +4,6 @@ import { motion } from "framer-motion";
 import { IconRepeat } from "@tabler/icons-react";
 import { Todo } from "../../types/todo";
 import DragToDeleteOverlay from "../ui/DragToDeleteOverlay";
-import { useDragToDelete } from "../../hooks/useDragToDelete";
 import { doc, deleteDoc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
@@ -14,6 +13,7 @@ interface TodoCardProps {
   todo: Todo;
   onClick: () => void;
   onDelete?: (todo: Todo) => void;
+  onContextMenu?: (event: React.MouseEvent, todo: Todo) => void; // ✅ ADD THIS
   instanceDate?: Date;
   stackIndex?: number;
   isStacked?: boolean;
@@ -25,6 +25,7 @@ export default function TodoCard({
   todo,
   onClick,
   onDelete,
+  onContextMenu, // ✅ ADD THIS
   instanceDate,
   stackIndex = 0,
   isStacked = false,
@@ -152,6 +153,15 @@ export default function TodoCard({
   const handleCardClick = () => {
     if (isDragging) return;
     onClick();
+  };
+
+  // ✅ ADD RIGHT-CLICK HANDLER
+  const handleRightClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onContextMenu && !isDragging && !isDeleting) {
+      onContextMenu(e, todo);
+    }
   };
 
   // Custom drag start handler that creates card-like drag image
@@ -298,6 +308,7 @@ export default function TodoCard({
           draggable={!!todo.id && !isDeleting}
           onDragStart={handleCustomDragStart}
           onDragEnd={handleCustomDragEnd}
+          onContextMenu={handleRightClick} // ✅ ADD THIS
           className={`
             h-full w-full p-3 rounded-lg shadow-md transition-all duration-200 relative overflow-hidden
             ${(!isDeleting && !!todo.id) 
