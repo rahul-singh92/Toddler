@@ -114,6 +114,10 @@ export default function TodoPage() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [loading, setLoading] = useState(true);
   
+  // ✅ ADD THESE EDIT FUNCTIONALITY STATES
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+  
   // Scroll container refs for synchronization
   const headerScrollRef = useRef<HTMLDivElement>(null);
   const contentScrollRef = useRef<HTMLDivElement>(null);
@@ -138,7 +142,7 @@ export default function TodoPage() {
       return;
     }
 
-    // Use requestAnimationFrame to ensure layout is complete [web:79][web:84]
+    // Use requestAnimationFrame to ensure layout is complete
     requestAnimationFrame(() => {
       const headerContainer = headerScrollRef.current!;
       const contentContainer = contentScrollRef.current!;
@@ -175,7 +179,7 @@ export default function TodoPage() {
     });
   };
 
-  // Use useLayoutEffect for initial centering to avoid flash [web:96]
+  // Use useLayoutEffect for initial centering to avoid flash
   useLayoutEffect(() => {
     if (isInitialLoad) {
       // Multiple attempts to ensure proper centering
@@ -333,6 +337,34 @@ export default function TodoPage() {
     setIsDetailsModalOpen(true);
   };
 
+  // ✅ ADD THESE EDIT HANDLER FUNCTIONS
+  // Handle edit todo (called from context menu)
+  const handleEditTodo = (todo: Todo) => {
+    console.log("✏️ Edit todo requested:", todo.title);
+    setEditingTodo(todo);
+    setIsEditModalOpen(true);
+  };
+
+  // Handle todo updated from edit modal
+  const handleTodoUpdated = (updatedTodo: Todo) => {
+    console.log("✅ Todo updated:", updatedTodo.title);
+    setIsEditModalOpen(false);
+    setEditingTodo(null);
+    // The real-time listener should automatically update the todos list
+  };
+
+  // Handle closing edit modal
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setEditingTodo(null);
+  };
+
+  // Handle closing details modal
+  const handleCloseDetailsModal = () => {
+    setIsDetailsModalOpen(false);
+    setSelectedTodo(null);
+  };
+
   // Group todos dynamically with recurrence expansion
   const getGroupedTodos = (): TodoGroup[] => {
     if (loading || todos.length === 0) {
@@ -465,11 +497,12 @@ export default function TodoPage() {
         {/* LEFT SIDEBAR */}
         <LeftSidebar onToggleSidebar={() => setSidebarCollapsed((s) => !s)} />
 
-        {/* TODO SIDEBAR */}
+        {/* TODO SIDEBAR - ✅ ADD THE onEditTodo PROP */}
         <TodoSidebar
           sidebarCollapsed={sidebarCollapsed}
           groups={groups}
           onAddTodo={() => setIsModalOpen(true)}
+          onEditTodo={handleEditTodo} // ✅ ADD THIS LINE
           loading={loading}
         />
 
@@ -571,6 +604,10 @@ export default function TodoPage() {
                                 key={todo.id} 
                                 todo={todo} 
                                 onClick={() => handleTodoClick(todo)}
+                                onDelete={(deletedTodo) => {
+                                  console.log('Card deleted:', deletedTodo.title);
+                                  // Real-time listener will handle the update
+                                }}
                               />
                             ))}
                         </div>
@@ -629,16 +666,25 @@ export default function TodoPage() {
           </div>
         </motion.main>
 
-        {/* Modals */}
+        {/* ✅ ADD THE EDIT MODAL */}
+        {/* Create New Todo Modal */}
         <TodoModal 
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           onTodoAdded={handleTodoAdded}
         />
 
+        {/* Edit Todo Modal */}
+        <TodoModal 
+          isOpen={isEditModalOpen}
+          onClose={handleCloseEditModal}
+          onTodoAdded={handleTodoUpdated}
+          editingTodo={editingTodo} // Pass the todo to edit
+        />
+
         <TodoDetailsModal
           isOpen={isDetailsModalOpen}
-          onClose={() => setIsDetailsModalOpen(false)}
+          onClose={handleCloseDetailsModal}
           todo={selectedTodo}
         />
       </div>

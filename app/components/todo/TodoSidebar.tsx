@@ -4,6 +4,7 @@ import { IconPlus, IconMinus } from "@tabler/icons-react";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { Todo } from "../../types/todo";
 import TodoDetailsModal from "./TodoDetailsModal";
+import TodoContextMenu from "./TodoContextMenu";
 import TodoRemovalAnimation from "../ui/TodoRemovalAnimation";
 import DragToDeleteOverlay from "../ui/DragToDeleteOverlay";
 import { useDragToDelete } from "../../hooks/useDragToDelete";
@@ -23,6 +24,7 @@ interface TodoSidebarProps {
   sidebarCollapsed: boolean;
   groups: TodoGroup[];
   onAddTodo: () => void;
+  onEditTodo: (todo: Todo) => void; // Add this prop for editing
   loading?: boolean;
 }
 
@@ -30,12 +32,24 @@ export default function TodoSidebar({
   sidebarCollapsed,
   groups,
   onAddTodo,
+  onEditTodo, // Add this prop
   loading = false
 }: TodoSidebarProps) {
   const [user] = useAuthState(auth);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    isVisible: boolean;
+    position: { x: number; y: number };
+    todo: Todo | null;
+  }>({
+    isVisible: false,
+    position: { x: 0, y: 0 },
+    todo: null
+  });
 
   // State to track todos that are completing (for animation)
   const [completingTodos, setCompletingTodos] = useState<Set<string>>(new Set());
@@ -323,10 +337,29 @@ export default function TodoSidebar({
     handleTodoComplete(todo, event.target.checked);
   };
 
+  // Handle left click on todo (for details)
   const handleTodoClick = (todo: Todo) => {
-    if (isDragging) return; // Prevent modal from opening during drag
+    if (isDragging || contextMenu.isVisible) return; // Prevent modal from opening during drag or context menu
     setSelectedTodo(todo);
     setIsDetailsModalOpen(true);
+  };
+
+  // Handle right click on todo (for context menu)
+  const handleTodoRightClick = (event: React.MouseEvent, todo: Todo) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    // Close any existing context menu first
+    setContextMenu({ isVisible: false, position: { x: 0, y: 0 }, todo: null });
+
+    // Small delay to prevent flickering
+    setTimeout(() => {
+      setContextMenu({
+        isVisible: true,
+        position: { x: event.clientX, y: event.clientY },
+        todo: todo
+      });
+    }, 10);
   };
 
   const handleLabelClick = (event: React.MouseEvent) => {
@@ -336,6 +369,10 @@ export default function TodoSidebar({
   const handleCloseDetailsModal = () => {
     setIsDetailsModalOpen(false);
     setSelectedTodo(null);
+  };
+
+  const handleCloseContextMenu = () => {
+    setContextMenu({ isVisible: false, position: { x: 0, y: 0 }, todo: null });
   };
 
   // Enhanced filtering logic that separates recurring todos from date-based groups
@@ -570,6 +607,7 @@ export default function TodoSidebar({
                                           }
                                         }}
                                         onDragEnd={handleDragEnd}
+                                        onContextMenu={(e) => handleTodoRightClick(e, todo)}
                                         className={`
                                           flex items-center space-x-2 px-2 py-1 rounded-md transition-all duration-200
                                           ${(!isCompleting && !isRemoving && !isDeleting && !!todo.id)
@@ -737,6 +775,16 @@ export default function TodoSidebar({
           }
         `}</style>
       </motion.aside>
+
+      {/* Context Menu */}
+      <TodoContextMenu
+        isVisible={contextMenu.isVisible}
+        position={contextMenu.position}
+        todo={contextMenu.todo}
+        onEdit={onEditTodo}
+        onDelete={handleTodoDelete}
+        onClose={handleCloseContextMenu}
+      />
 
       <TodoDetailsModal
         isOpen={isDetailsModalOpen}

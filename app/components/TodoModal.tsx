@@ -1,8 +1,8 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { IconX, IconCalendar, IconLink, IconPlus, IconTrash, IconEdit, IconRepeat } from "@tabler/icons-react";
+import { IconX, IconCalendar, IconLink, IconPlus, IconTrash, IconEdit, IconRepeat, IconClock } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { addDoc, collection, Timestamp } from "firebase/firestore";
+import { addDoc, collection, Timestamp, doc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { Todo, TodoFormData, Recurrence } from "../types/todo";
@@ -14,6 +14,7 @@ interface TodoModalProps {
   isOpen: boolean;
   onClose: () => void;
   onTodoAdded: (todo: Todo) => void;
+  editingTodo?: Todo | null;
 }
 
 const initialFormData: TodoFormData = {
@@ -39,7 +40,7 @@ const formatDateForPicker = (date?: string | Date): string | undefined => {
   return date.toISOString();
 };
 
-export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalProps) {
+export default function TodoModal({ isOpen, onClose, onTodoAdded, editingTodo = null }: TodoModalProps) {
   const [user] = useAuthState(auth);
   const [formData, setFormData] = useState<TodoFormData>(initialFormData);
   const [linksList, setLinksList] = useState<string[]>([]);
@@ -58,6 +59,29 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
 
   // Recurrence states
   const [recurrence, setRecurrence] = useState<Recurrence>({ type: 'none' });
+
+  // Edit mode detection
+  const isEditMode = editingTodo !== null;
+
+  // Helper function for date conversion
+  const convertToDate = (dateValue: any): Date | undefined => {
+    if (!dateValue) return undefined;
+    
+    try {
+      if (typeof dateValue === 'string') {
+        const parsed = new Date(dateValue);
+        return isNaN(parsed.getTime()) ? undefined : parsed;
+      } else if (dateValue instanceof Date) {
+        return dateValue;
+      } else if (dateValue && typeof dateValue === 'object' && 'toDate' in dateValue) {
+        return dateValue.toDate();
+      }
+    } catch (error) {
+      console.warn('Error converting date:', error);
+    }
+    
+    return undefined;
+  };
 
   // Predefined categories
   const predefinedCategories = [
@@ -94,15 +118,51 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
   // Reset form when modal opens/closes
   useEffect(() => {
     if (isOpen) {
-      setFormData(initialFormData);
-      setLinksList([]);
+      if (isEditMode && editingTodo) {
+        // Pre-fill form for edit mode
+        console.log("📝 Editing todo:", editingTodo.title);
+        
+        // Check if category is custom
+        const isCustomCat = !predefinedCategories.some(cat => cat.value === editingTodo.category);
+        
+        setFormData({
+          title: editingTodo.title,
+          description: editingTodo.description || "",
+          category: isCustomCat ? "" : (editingTodo.category || "personal"),
+          links: "", // Will be handled by linksList
+          startTime: editingTodo.startTime ? editingTodo.startTime.toISOString() : "",
+          endTime: editingTodo.endTime ? editingTodo.endTime.toISOString() : "",
+          priority: editingTodo.priority,
+          color: editingTodo.color,
+        });
+        
+        setLinksList(editingTodo.links || []);
+        setIsCustomCategory(isCustomCat);
+        setCustomCategoryName(isCustomCat ? editingTodo.category || "" : "");
+        
+        // Set recurrence data with safe conversion
+        if (editingTodo.recurrence) {
+          setRecurrence({
+            type: editingTodo.recurrence.type || 'none',
+            interval: editingTodo.recurrence.interval,
+            endDate: convertToDate(editingTodo.recurrence.endDate)?.toISOString()
+          });
+        } else {
+          setRecurrence({ type: 'none' });
+        }
+      } else {
+        // Reset for create mode
+        setFormData(initialFormData);
+        setLinksList([]);
+        setIsCustomCategory(false);
+        setCustomCategoryName("");
+        setRecurrence({ type: 'none' });
+      }
+      
       setCurrentLink("");
       setErrors({});
-      setIsCustomCategory(false);
-      setCustomCategoryName("");
-      setRecurrence({ type: 'none' });
     }
-  }, [isOpen]);
+  }, [isOpen, isEditMode, editingTodo]);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -252,8 +312,6 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
   });
 };
 
-
-
   const formatRecurrenceEndDateForDisplay = (dateTimeString?: string | Date) => {
     if (!dateTimeString) return "Select end date (optional)";
     
@@ -312,36 +370,84 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
         links: linksList,
         startTime: formData.startTime ? new Date(formData.startTime) : undefined,
         endTime: formData.endTime ? new Date(formData.endTime) : undefined,
-        completed: false,
+        completed: editingTodo?.completed || false,
         priority: formData.priority,
         color: formData.color,
-        createdAt: now,
+        createdAt: editingTodo?.createdAt || now,
         updatedAt: now,
-        sharedWith: [],
+        sharedWith: editingTodo?.sharedWith || [],
         recurrence: recurrence,
         ownerId: user.uid,
       };
 
-      // Add to Firestore subcollection
-      const todosRef = collection(db, 'users', user.uid, 'todos');
-      const docRef = await addDoc(todosRef, {
-        ...todoData,
-        startTime: todoData.startTime ? Timestamp.fromDate(todoData.startTime) : null,
-        endTime: todoData.endTime ? Timestamp.fromDate(todoData.endTime) : null,
-        createdAt: Timestamp.fromDate(todoData.createdAt),
-        updatedAt: Timestamp.fromDate(todoData.updatedAt),
-        recurrence: {
-          ...recurrence,
-          endDate: recurrence.endDate ? Timestamp.fromDate(new Date(recurrence.endDate)) : null
-        }
-      });
+      let todoId: string;
+      let resultTodo: Todo;
 
-      const newTodo: Todo = { ...todoData, id: docRef.id };
-      onTodoAdded(newTodo);
+      // Clean recurrence object to avoid undefined values in Firestore
+      const cleanRecurrence = {
+        type: recurrence.type || 'none',
+        ...(recurrence.type !== 'none' && recurrence.interval && { interval: recurrence.interval }),
+        ...(recurrence.endDate && { endDate: Timestamp.fromDate(new Date(recurrence.endDate)) })
+      };
+
+      if (isEditMode && editingTodo && editingTodo.id) {
+        // Update existing todo
+        const originalTodoId = editingTodo.id.includes('-') 
+          ? editingTodo.id.split('-')[0] 
+          : editingTodo.id;
+        
+        if (!originalTodoId) {
+          throw new Error("Invalid todo ID for editing");
+        }
+        
+        todoId = originalTodoId;
+        const todoRef = doc(db, 'users', user.uid, 'todos', todoId);
+        
+        await updateDoc(todoRef, {
+          title: todoData.title,
+          description: todoData.description,
+          category: todoData.category,
+          links: todoData.links,
+          startTime: todoData.startTime ? Timestamp.fromDate(todoData.startTime) : null,
+          endTime: todoData.endTime ? Timestamp.fromDate(todoData.endTime) : null,
+          priority: todoData.priority,
+          color: todoData.color,
+          updatedAt: Timestamp.fromDate(todoData.updatedAt),
+          recurrence: cleanRecurrence
+        });
+        
+        resultTodo = { ...todoData, id: todoId };
+        console.log(`✅ Successfully updated todo: "${formData.title}"`);
+      } else {
+        // Create new todo
+        const todosRef = collection(db, 'users', user.uid, 'todos');
+        
+        const docRef = await addDoc(todosRef, {
+          title: todoData.title,
+          description: todoData.description,
+          category: todoData.category,
+          links: todoData.links,
+          startTime: todoData.startTime ? Timestamp.fromDate(todoData.startTime) : null,
+          endTime: todoData.endTime ? Timestamp.fromDate(todoData.endTime) : null,
+          completed: todoData.completed,
+          priority: todoData.priority,
+          color: todoData.color,
+          createdAt: Timestamp.fromDate(todoData.createdAt),
+          updatedAt: Timestamp.fromDate(todoData.updatedAt),
+          sharedWith: todoData.sharedWith,
+          recurrence: cleanRecurrence,
+          ownerId: todoData.ownerId
+        });
+
+        resultTodo = { ...todoData, id: docRef.id };
+        console.log(`✅ Successfully created todo: "${formData.title}"`);
+      }
+
+      onTodoAdded(resultTodo);
       onClose();
     } catch (error) {
-      console.error("Error adding todo:", error);
-      setErrors({ submit: "Failed to create todo. Please try again." });
+      console.error(`Error ${isEditMode ? 'updating' : 'adding'} todo:`, error);
+      setErrors({ submit: `Failed to ${isEditMode ? 'update' : 'create'} todo. Please try again.` });
     } finally {
       setIsSubmitting(false);
     }
@@ -371,7 +477,25 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
           >
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-[#2A2A2A]">
-              <h2 className="text-2xl font-semibold text-white">Create New Todo</h2>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-[#C8A2D6]/20 rounded-xl flex items-center justify-center">
+                  {isEditMode ? (
+                    <IconClock size={16} className="text-[#C8A2D6]" />
+                  ) : (
+                    <IconPlus size={16} className="text-[#C8A2D6]" />
+                  )}
+                </div>
+                <div>
+                  <h2 className="text-2xl font-semibold text-white">
+                    {isEditMode ? 'Edit Todo' : 'Create New Todo'}
+                  </h2>
+                  {isEditMode && (
+                    <p className="text-sm text-[#6A6A6A]">
+                      Editing: {editingTodo?.title}
+                    </p>
+                  )}
+                </div>
+              </div>
               <button
                 onClick={onClose}
                 className="p-2 text-[#6A6A6A] hover:text-white hover:bg-[#2A2A2A] rounded-lg transition-colors"
@@ -568,7 +692,7 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                           )}
                         </div>
 
-                        {/* End Date (Optional) - FIXED: Separate buttons to avoid nesting */}
+                        {/* End Date (Optional) */}
                         <div>
                           <label className="block text-white text-sm font-medium mb-2">
                             End Date (Optional)
@@ -754,7 +878,7 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded }: TodoModalPro
                   disabled={isSubmitting}
                   className="flex-1 px-4 py-3 bg-[#C8A2D6] text-black rounded-lg hover:bg-[#B892C6] transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? "Creating..." : "Create Todo"}
+                  {isSubmitting ? (isEditMode ? "Updating..." : "Creating...") : (isEditMode ? "Update Todo" : "Create Todo")}
                 </button>
               </div>
             </form>
