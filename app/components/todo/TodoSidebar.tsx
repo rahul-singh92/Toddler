@@ -24,7 +24,7 @@ interface TodoSidebarProps {
   sidebarCollapsed: boolean;
   groups: TodoGroup[];
   onAddTodo: () => void;
-  onEditTodo: (todo: Todo) => void; // Add this prop for editing
+  onEditTodo: (todo: Todo) => void;
   loading?: boolean;
 }
 
@@ -32,7 +32,7 @@ export default function TodoSidebar({
   sidebarCollapsed,
   groups,
   onAddTodo,
-  onEditTodo, // Add this prop
+  onEditTodo,
   loading = false
 }: TodoSidebarProps) {
   const [user] = useAuthState(auth);
@@ -375,6 +375,11 @@ export default function TodoSidebar({
     setContextMenu({ isVisible: false, position: { x: 0, y: 0 }, todo: null });
   };
 
+  // ✅ ADD TODO BUTTON CLICK HANDLER
+  const handleAddTodoClick = () => {
+    onAddTodo();
+  };
+
   // Enhanced filtering logic that separates recurring todos from date-based groups
   const getFilteredTodos = (todos: Todo[], groupKey: string, isDateBased: boolean = false) => {
     const seenOriginalIds = new Set<string>();
@@ -534,8 +539,7 @@ export default function TodoSidebar({
               {groups.map((group) => {
                 const filteredTodos = getFilteredTodos(group.todos, group.key, group.isDateBased);
 
-                if (filteredTodos.length === 0) return null;
-
+                // ✅ ALWAYS SHOW GROUPS (even if empty) so we can show the "Add Todo" option
                 return (
                   <div key={group.key} className="mb-2">
                     <div className="bg-[#151515] rounded-lg overflow-hidden">
@@ -724,6 +728,47 @@ export default function TodoSidebar({
                                     </motion.li>
                                   );
                                 })}
+
+                                {/* ✅ ADD TODO BUTTON - Always show at the end of each group */}
+                                <motion.li
+                                  key={`add-todo-${group.key}`}
+                                  className="relative"
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ duration: 0.3, delay: 0.1 }}
+                                  layout
+                                >
+                                  <div
+                                    onClick={handleAddTodoClick}
+                                    className="flex items-center space-x-2 px-2 py-1 rounded-md transition-all duration-200 hover:bg-[#1f1f1f] cursor-pointer hover:shadow-lg hover:scale-[1.02] border border-dashed border-[#424242] hover:border-[#C8A2D6]"
+                                  >
+                                    {/* Plus Icon instead of checkbox */}
+                                    <div className="relative flex items-center cursor-pointer flex-shrink-0">
+                                      <motion.div
+                                        className="w-5 h-5 rounded-md border border-[#424242] flex items-center justify-center transition-all duration-200 bg-[#2A2A2A] hover:bg-[#C8A2D6] hover:border-[#C8A2D6] group"
+                                        whileHover={{ scale: 1.1 }}
+                                        whileTap={{ scale: 0.95 }}
+                                      >
+                                        <IconPlus size={12} className="text-[#6A6A6A] group-hover:text-black transition-colors" />
+                                      </motion.div>
+                                    </div>
+
+                                    {/* Add Todo Text */}
+                                    <div className="flex-1 flex items-center justify-between min-w-0 cursor-pointer">
+                                      <span className="text-[#6A6A6A] text-sm hover:text-[#C8A2D6] transition-colors">
+                                        Add todo
+                                      </span>
+
+                                      {/* Category indicator */}
+                                      <div className="flex items-center space-x-1 flex-shrink-0 ml-2">
+                                        <div
+                                          className="w-3 h-3 rounded-full flex-shrink-0 border border-[#424242] opacity-50"
+                                          title="New todo"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                </motion.li>
                               </AnimatePresence>
                             </ul>
                           </motion.div>
