@@ -81,16 +81,31 @@ export default function AuthForm() {
       const userSnap = await getDoc(userRef);
 
       if (!userSnap.exists()) {
-        const names = user.displayName?.split(" ") || ["User", ""];
+        // Handle cases where displayName might be empty, null, or contain only one name
+        let firstName = "User";
+        let lastName = "";
 
+        if (user.displayName && user.displayName.trim()) {
+          const nameParts = user.displayName.trim().split(" ");
+          firstName = nameParts[0] || "User";
+          
+          // If there are multiple parts, join everything except the first as last name
+          // If there's only one part, lastName remains empty
+          if (nameParts.length > 1) {
+            lastName = nameParts.slice(1).join(" ");
+          }
+        }
+
+        // Generate avatar URL with proper handling of empty last name
+        const avatarSeed = lastName ? `${firstName}+${lastName}` : firstName;
         const avatarUrl =
           user.photoURL ||
-          `https://api.dicebear.com/6.x/adventurer-neutral/svg?seed=${names[0]}+${names[1]}`;
+          `https://api.dicebear.com/6.x/adventurer-neutral/svg?seed=${avatarSeed}`;
 
         await setDoc(userRef, {
-          uid:user.uid,
-          firstName: names[0],
-          lastName: names[1],
+          uid: user.uid,
+          firstName: firstName,
+          lastName: lastName,
           email: user.email,
           photoURL: avatarUrl,
           createdAt: new Date(),
@@ -193,7 +208,7 @@ export default function AuthForm() {
             </>
           ) : (
             <>
-              Don’t have an account?{" "}
+              Don't have an account?{" "}
               <button onClick={() => {setMode("signup"); setErrorMsg("");}} className="text-indigo-600 dark:text-indigo-400 hover:underline">
                 Sign up
               </button>
