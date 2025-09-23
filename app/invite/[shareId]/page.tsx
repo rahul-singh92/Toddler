@@ -3,15 +3,21 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "../../lib/firebase";
-import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
-import { doc, getDoc, collection, query, where, onSnapshot, updateDoc, writeBatch, arrayUnion, setDoc, deleteDoc } from "firebase/firestore";
+import { signInWithPopup, GoogleAuthProvider, AuthError } from "firebase/auth";
+import { doc, getDoc, collection, query, where, onSnapshot, updateDoc, writeBatch, arrayUnion, deleteDoc } from "firebase/firestore";
 import { TodoInvitation, CollaboratorInfo } from "../../types/collaboration";
 import { Todo } from "../../types/todo";
-import { IconUsers, IconCalendar, IconClock, IconTag, IconArrowLeft, IconCheck, IconX, IconEye, IconEdit, IconExternalLink, IconLogin } from "@tabler/icons-react";
+import { IconUsers, IconCalendar, IconClock, IconTag, IconCheck, IconX } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "framer-motion";
 import TodoCard from "../../components/todo/TodoCard";
 import { isSameDay, isThisWeek, isThisMonth } from "../../utils/dateHelpers";
-import Image from "next/image";
+
+// Import shared todo components
+import SharedTodoHeader from "../../components/sharedTodo/SharedTodoHeader";
+import LoginPrompt from "../../components/sharedTodo/LoginPrompt";
+import LoadingState from "../../components/sharedTodo/LoadingState";
+import ErrorState from "../../components/sharedTodo/ErrorState";
+import FilterTabs from "../../components/sharedTodo/FilterTabs";
 
 interface SharedTodoPageState {
   invitation: TodoInvitation | null;
@@ -19,108 +25,6 @@ interface SharedTodoPageState {
   loading: boolean;
   error: string;
   userRole: 'viewer' | 'editor' | 'none';
-}
-
-function HeaderBar({ 
-  invitation,
-  userRole,
-  onAcceptInvitation,
-  onSignIn,
-  isJoining,
-  isSigningIn,
-  user
-}: { 
-  invitation: TodoInvitation | null;
-  userRole: 'viewer' | 'editor' | 'none';
-  onAcceptInvitation: () => void;
-  onSignIn: () => void;
-  isJoining: boolean;
-  isSigningIn: boolean;
-  user: any;
-}) {
-  return (
-    <div className="sticky top-0 z-30 bg-[#1A1A1A] px-8 py-6 border-b border-gray-800">
-      <div className="flex flex-col space-y-4">
-        {/* Logo Row - Full width, centered */}
-        <div className="flex justify-center">
-          <Image 
-            src="/images/Logo.svg" 
-            alt="Logo" 
-            width={200} 
-            height={200}
-            priority
-            style={{height: "auto"}}
-            className="drop-shadow-lg" 
-          />
-        </div>
-        
-        {/* Content Row - Title and Actions */}
-        <div className="flex items-center justify-between">
-          {/* Left section with Title */}
-          <div className="flex items-center space-x-4">
-            <h1 className="text-2xl font-bold text-white">{invitation?.title || 'Shared Todos'}</h1>
-            {invitation?.description && (
-              <>
-                <span className="text-4xl leading-none text-gray-600">/</span>
-                <span className="font-semibold text-lg text-[#C8A2D6]">{invitation.description}</span>
-              </>
-            )}
-          </div>
-
-          {/* Right section with actions */}
-          <div className="flex space-x-3">
-            {/* Status Badge */}
-            <div className={`px-4 py-2 rounded-md text-xs font-medium ${
-              userRole === 'editor' 
-                ? 'bg-green-900/30 text-green-400 border border-green-700' 
-                : userRole === 'viewer' 
-                ? 'bg-blue-900/30 text-blue-400 border border-blue-700' 
-                : 'bg-gray-800 text-gray-300 border border-gray-700'
-            }`}>
-              {userRole === 'editor' ? 'Editor' : userRole === 'viewer' ? 'Viewer' : 'Guest'}
-            </div>
-
-            {/* Join Collaboration Button */}
-            {userRole === 'none' && user && (
-              <button
-                onClick={onAcceptInvitation}
-                disabled={isJoining}
-                className={`px-4 py-2 text-white text-sm font-medium rounded-md transition-colors ${
-                  isJoining 
-                    ? 'bg-gray-700 cursor-not-allowed' 
-                    : 'bg-[#C8A2D6] hover:bg-[#B591C8] shadow-lg'
-                }`}
-              >
-                {isJoining ? 'Joining...' : 'Join Collaboration'}
-              </button>
-            )}
-
-            {/* Success state for joined users */}
-            {userRole === 'editor' && isJoining && (
-              <div className="px-4 py-2 bg-green-900/30 text-green-400 text-sm font-medium rounded-md border border-green-700">
-                Joined! Redirecting...
-              </div>
-            )}
-
-            {/* Sign In Button */}
-            {!user && (
-              <button
-                onClick={onSignIn}
-                disabled={isSigningIn}
-                className={`px-4 py-2 text-white text-sm font-medium rounded-md transition-colors ${
-                  isSigningIn 
-                    ? 'bg-gray-700 cursor-not-allowed' 
-                    : 'bg-[#C8A2D6] hover:bg-[#B591C8] shadow-lg'
-                }`}
-              >
-                {isSigningIn ? 'Signing in...' : 'Sign In'}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export default function SharedTodoPage() {
@@ -144,6 +48,7 @@ export default function SharedTodoPage() {
   const [isJoining, setIsJoining] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [shouldAutoAcceptAfterAuth, setShouldAutoAcceptAfterAuth] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   // Helper function to clean data for Firestore (remove undefined values)
   const cleanFirestoreData = (obj: any): any => {
@@ -296,17 +201,37 @@ export default function SharedTodoPage() {
     }
   }, [shareId, user, authLoading, shouldAutoAcceptAfterAuth]);
 
-  // ✅ Handle Google Sign In
+  // ✅ Enhanced Google Sign In with Error Handling
   const handleSignIn = async () => {
     setIsSigningIn(true);
+    setLoginError(null); // Clear previous errors
+    
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
       
-      // Set flag to auto-accept invitation after successful sign in
-      setShouldAutoAcceptAfterAuth(true);
-    } catch (error) {
-      console.error("Sign in error:", error);
+      if (result.user) {
+        // Set flag to auto-accept invitation after successful sign in
+        setShouldAutoAcceptAfterAuth(true);
+        console.log("✅ Successfully signed in:", result.user.email);
+      }
+    } catch (error: any) {
+      console.error("❌ Sign in error:", error);
+      
+      // Handle different types of auth errors
+      let errorMessage = "Failed to sign in. Please try again.";
+      
+      if (error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
+        errorMessage = "Sign in was cancelled. Please try again if you want to join the collaboration.";
+      } else if (error.code === 'auth/popup-blocked') {
+        errorMessage = "Pop-up was blocked by your browser. Please enable pop-ups and try again.";
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = "Network error. Please check your connection and try again.";
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = "Too many sign-in attempts. Please wait a moment and try again.";
+      }
+      
+      setLoginError(errorMessage);
     } finally {
       setIsSigningIn(false);
     }
@@ -327,7 +252,7 @@ export default function SharedTodoPage() {
     }
   };
 
-  // ✅ UPDATED: Handle accepting invitation directly
+  // ✅ Handle accepting invitation directly
   const handleAcceptInvitation = async () => {
     if (!user || !state.invitation) {
       console.error("User not authenticated or invitation not loaded");
@@ -489,165 +414,25 @@ export default function SharedTodoPage() {
     return date < new Date() && !isSameDay(date, new Date()) && !todo.completed;
   });
 
-  // ✅ Show loading while auth is loading (Dark Theme)
+  // ✅ Show loading state
   if (authLoading || (state.loading && !state.invitation)) {
-    return (
-      <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-gray-600 border-t-[#C8A2D6] rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-300">Loading shared todos...</p>
-        </div>
-      </div>
-    );
+    return <LoadingState />;
   }
 
-  // ✅ Show error state (Dark Theme)
+  // ✅ Show error state
   if (state.error) {
-    return (
-      <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center">
-        <div className="text-center p-8">
-          <div className="w-16 h-16 bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-700">
-            <IconX size={32} className="text-red-400" />
-          </div>
-          <h1 className="text-xl font-semibold text-white mb-2">Error Loading Shared Todos</h1>
-          <p className="text-gray-400 mb-6">{state.error}</p>
-          <div className="space-x-3">
-            <button
-              onClick={() => router.push('/')}
-              className="px-4 py-2 bg-gray-800 text-gray-300 rounded-md hover:bg-gray-700 transition-colors border border-gray-700"
-            >
-              Go Home
-            </button>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-[#C8A2D6] text-white rounded-md hover:bg-[#B591C8] transition-colors"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+    return <ErrorState error={state.error} />;
   }
 
-  // ✅ Show login required state for unauthenticated users (Dark Theme)
+  // ✅ Show login required state for unauthenticated users
   if (!user && state.invitation) {
     return (
-      <div className="min-h-screen bg-[#0F0F0F]">
-        {/* Header matching dark style with bigger logo */}
-        <div className="sticky top-0 z-30 bg-[#1A1A1A] px-8 py-6 border-b border-gray-800">
-          <div className="flex flex-col items-center space-y-4">
-            {/* Big Logo */}
-            <Image 
-              src="/images/Logo.svg" 
-              alt="Logo" 
-              width={200} 
-              height={200}
-              priority
-              style={{height: "auto"}}
-              className="drop-shadow-lg" 
-            />
-            {/* Title */}
-            <h1 className="text-2xl font-bold text-white">Join Collaboration</h1>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-6">
-          <div className="max-w-2xl mx-auto">
-            {/* Invitation Preview Card */}
-            <div className="bg-[#1A1A1A] rounded-lg shadow-xl p-6 mb-6 border border-gray-800">
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-[#C8A2D6] rounded-lg flex items-center justify-center mx-auto mb-4 shadow-lg">
-                  <IconUsers size={32} className="text-white" />
-                </div>
-                <h2 className="text-xl font-bold text-white mb-2">You've been invited to collaborate!</h2>
-                <p className="text-gray-400">
-                  {state.invitation.title && (
-                    <>Join "<strong className="text-[#C8A2D6]">{state.invitation.title}</strong>" to start collaborating on todos</>
-                  )}
-                </p>
-              </div>
-
-              {/* Stats */}
-              <div className="flex items-center justify-center space-x-6 text-sm text-gray-400 mb-6">
-                <div className="flex items-center space-x-2">
-                  <IconCalendar size={16} className="text-[#C8A2D6]" />
-                  <span>{state.invitation.todoIds.length} todos</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <IconUsers size={16} className="text-[#C8A2D6]" />
-                  <span>{state.invitation.acceptedUsers.length} members</span>
-                </div>
-                {state.invitation.expiresAt && (
-                  <div className="flex items-center space-x-2">
-                    <IconClock size={16} className="text-[#C8A2D6]" />
-                    <span>Expires {state.invitation.expiresAt.toLocaleDateString()}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Sign In Button */}
-              <div className="text-center">
-                <button
-                  onClick={handleSignIn}
-                  disabled={isSigningIn}
-                  className={`px-6 py-3 text-white text-sm font-medium rounded-md transition-colors shadow-lg ${
-                    isSigningIn
-                      ? 'bg-gray-700 cursor-not-allowed'
-                      : 'bg-[#C8A2D6] hover:bg-[#B591C8]'
-                  }`}
-                >
-                  {isSigningIn ? (
-                    <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Signing in...</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center space-x-2">
-                      <IconLogin size={16} />
-                      <span>Sign in with Google</span>
-                    </div>
-                  )}
-                </button>
-                
-                <p className="text-xs text-gray-500 mt-4">
-                  After signing in, you'll automatically join this collaboration.
-                </p>
-              </div>
-            </div>
-
-            {/* Collaborators if any */}
-            {state.invitation.acceptedUsers && state.invitation.acceptedUsers.length > 0 && (
-              <div className="bg-[#1A1A1A] rounded-lg shadow-xl p-6 border border-gray-800">
-                <h3 className="text-lg font-semibold text-white mb-4">Current Team Members</h3>
-                <div className="flex -space-x-2">
-                  {state.invitation.acceptedUsers.slice(0, 5).map((collaborator) => (
-                    <div key={collaborator.userId} className="relative group">
-                      <img
-                        src={collaborator.photoURL}
-                        alt={collaborator.displayName}
-                        className="w-10 h-10 rounded-full border-2 border-[#C8A2D6] shadow-sm"
-                      />
-                      {/* Tooltip */}
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                        {collaborator.displayName} ({collaborator.role})
-                      </div>
-                    </div>
-                  ))}
-                  {state.invitation.acceptedUsers.length > 5 && (
-                    <div className="w-10 h-10 rounded-full bg-gray-700 border-2 border-[#C8A2D6] shadow-sm flex items-center justify-center">
-                      <span className="text-xs font-medium text-gray-300">
-                        +{state.invitation.acceptedUsers.length - 5}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <LoginPrompt 
+        invitation={state.invitation}
+        onSignIn={handleSignIn}
+        isSigningIn={isSigningIn}
+        loginError={loginError}
+      />
     );
   }
 
@@ -656,7 +441,7 @@ export default function SharedTodoPage() {
   return (
     <div className="min-h-screen bg-[#0F0F0F]">
       {/* Header with dark theme */}
-      <HeaderBar 
+      <SharedTodoHeader 
         invitation={invitation}
         userRole={userRole}
         onAcceptInvitation={handleAcceptInvitation}
@@ -664,6 +449,7 @@ export default function SharedTodoPage() {
         isJoining={isJoining}
         isSigningIn={isSigningIn}
         user={user}
+        loginError={loginError}
       />
 
       {/* Main Content */}
@@ -716,27 +502,13 @@ export default function SharedTodoPage() {
           </div>
         </div>
 
-        {/* ✅ UPDATED Filter Tabs with Dark Theme and #C8A2D6 styling */}
-        <div className="bg-[#1A1A1A] p-1 rounded-lg w-fit mb-6 border border-gray-800">
-          {[
-            { key: 'all', label: 'All', count: state.todos.length },
-            { key: 'week', label: 'This Week', count: state.todos.filter(t => t.startTime ? isThisWeek(t.startTime) : isThisWeek(t.createdAt)).length },
-            { key: 'month', label: 'This Month', count: state.todos.filter(t => t.startTime ? isThisMonth(t.startTime) : isThisMonth(t.createdAt)).length },
-            { key: 'completed', label: 'Completed', count: state.todos.filter(t => t.completed).length }
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setFilter(tab.key as any)}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                filter === tab.key
-                  ? 'bg-[#C8A2D6] text-white shadow-lg border-2 border-[#C8A2D6]'
-                  : 'text-gray-400 hover:text-white border-2 border-transparent hover:border-[#C8A2D6]/30 hover:bg-[#C8A2D6]/10'
-              }`}
-            >
-              {tab.label} ({tab.key === filter ? filteredTodos.length : tab.count})
-            </button>
-          ))}
-        </div>
+        {/* Filter Tabs */}
+        <FilterTabs 
+          todos={state.todos}
+          filter={filter}
+          filteredTodos={filteredTodos}
+          onFilterChange={setFilter}
+        />
 
         {/* Content */}
         {filteredTodos.length === 0 ? (
