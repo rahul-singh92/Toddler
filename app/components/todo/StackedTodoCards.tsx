@@ -39,7 +39,7 @@ export default function StackedTodoCards({
 
   return (
     <div 
-      className="relative"
+      className="relative z-30"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
