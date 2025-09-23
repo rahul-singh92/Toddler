@@ -8,6 +8,8 @@ import TodoDetailsModal from "../components/todo/TodoDetailsModal";
 import TodoContextMenu from "../components/todo/TodoContextMenu";
 import StackedTodoCards from "../components/todo/StackedTodoCards";
 import TodoCard from "../components/todo/TodoCard";
+import ShareDropdown from "../components/ShareDropdown";
+import ShareLinkModal from "../components/ShareLinkModal";
 import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
 import { motion } from "framer-motion";
 import { Todo } from "../types/todo";
@@ -29,53 +31,103 @@ import {
 function HeaderBar({ 
   currentWeekStartDate, 
   onNavigateWeek, 
-  onGoToToday 
+  onGoToToday,
+  todos
 }: { 
   currentWeekStartDate: Date;
   onNavigateWeek: (direction: 'prev' | 'next') => void;
   onGoToToday: () => void;
+  todos: Todo[];
 }) {
   const monthYear = currentWeekStartDate.toLocaleString("default", { month: "long", year: "numeric" });
   const week = getWeekNumber(currentWeekStartDate);
+  
+  // State for share functionality
+  const [isShareDropdownVisible, setIsShareDropdownVisible] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareModalType, setShareModalType] = useState<'selected' | 'all'>('selected');
+
+  // Toggle dropdown on click
+  const handleShareClick = () => {
+    setIsShareDropdownVisible(!isShareDropdownVisible);
+  };
+
+  // Handle dropdown close
+  const handleDropdownClose = () => {
+    setIsShareDropdownVisible(false);
+  };
+
+  // Handle share action
+  const handleCreateShare = () => {
+    setShareModalType('selected');
+    setIsShareModalOpen(true);
+  };
 
   return (
-    <div className="sticky top-0 z-30 bg-white px-8 py-5 flex items-center justify-between border-b border-gray-200">
-      <div className="flex items-center space-x-6">
-        <h1 className="text-2xl font-bold text-gray-900">{monthYear}</h1>
-        <div className="flex items-center space-x-4">
-          <span className="text-4xl leading-none text-gray-300">/</span>
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-lg text-gray-700">W{week}</span>
+    <>
+      <div className="sticky top-0 z-30 bg-white px-8 py-5 flex items-center justify-between border-b border-gray-200">
+        <div className="flex items-center space-x-6">
+          <h1 className="text-2xl font-bold text-gray-900">{monthYear}</h1>
+          <div className="flex items-center space-x-4">
+            <span className="text-4xl leading-none text-gray-300">/</span>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-lg text-gray-700">W{week}</span>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button 
+              onClick={() => onNavigateWeek('prev')}
+              className="p-2 rounded hover:bg-gray-100 transition-colors"
+            >
+              <IconChevronLeft size={20} stroke={2} className="text-gray-600" />
+            </button>
+            <button 
+              onClick={() => onNavigateWeek('next')}
+              className="p-2 rounded hover:bg-gray-100 transition-colors"
+            >
+              <IconChevronRight size={20} stroke={2} className="text-gray-600" />
+            </button>
           </div>
         </div>
-        <div className="flex items-center space-x-2">
+
+        <div className="flex space-x-3">
           <button 
-            onClick={() => onNavigateWeek('prev')}
-            className="p-2 rounded hover:bg-gray-100 transition-colors"
+            onClick={onGoToToday}
+            className="px-4 py-2 rounded-md bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors"
           >
-            <IconChevronLeft size={20} stroke={2} className="text-gray-600" />
+            Today
           </button>
-          <button 
-            onClick={() => onNavigateWeek('next')}
-            className="p-2 rounded hover:bg-gray-100 transition-colors"
-          >
-            <IconChevronRight size={20} stroke={2} className="text-gray-600" />
-          </button>
+          
+          {/* Share Button with Click Toggle */}
+          <div className="relative">
+            <button 
+              onClick={handleShareClick}
+              className={`px-4 py-2 rounded-md text-white text-sm font-medium transition-colors ${
+                isShareDropdownVisible 
+                  ? 'bg-gray-800' 
+                  : 'bg-gray-900 hover:bg-gray-800'
+              }`}
+            >
+              Share
+            </button>
+            
+            <ShareDropdown 
+              isVisible={isShareDropdownVisible}
+              onClose={handleDropdownClose}
+              onCreateShare={handleCreateShare}
+            />
+          </div>
         </div>
       </div>
 
-      <div className="flex space-x-3">
-        <button 
-          onClick={onGoToToday}
-          className="px-4 py-2 rounded-md bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors"
-        >
-          Today
-        </button>
-        <button className="px-4 py-2 rounded-md bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition-colors">
-          Share
-        </button>
-      </div>
-    </div>
+      {/* Share Modal */}
+      <ShareLinkModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        todos={todos}
+        shareType={shareModalType}
+      />
+    </>
   );
 }
 
@@ -290,7 +342,7 @@ export default function TodoPage() {
     return () => window.removeEventListener('resize', handleResize);
   }, [currentWeekDates]);
 
-  // Fetch todos from Firestore in real-time
+  // ✅ UPDATED: Fetch todos from Firestore including collaboration fields
   useEffect(() => {
     if (!user) {
       setTodos([]);
@@ -326,8 +378,27 @@ export default function TodoPage() {
             endDate: data.recurrence?.endDate?.toDate?.() || data.recurrence?.endDate
           },
           ownerId: data.ownerId,
+          
+          // ✅ ADD COLLABORATION FIELDS
+          isShared: data.isShared || false,
+          originalId: data.originalId,
+          originalOwnerId: data.originalOwnerId,
+          collaborationType: data.collaborationType,
+          sharedBy: data.sharedBy ? {
+            userId: data.sharedBy.userId,
+            displayName: data.sharedBy.displayName,
+            email: data.sharedBy.email,
+            photoURL: data.sharedBy.photoURL
+          } : undefined,
         });
       });
+
+      // ✅ LOG SHARED TODOS FOR DEBUGGING
+      const sharedTodos = todosList.filter(todo => todo.isShared);
+      if (sharedTodos.length > 0) {
+        console.log(`📋 Found ${sharedTodos.length} shared todos:`, sharedTodos.map(t => ({ title: t.title, sharedBy: t.sharedBy?.displayName })));
+      }
+
       setTodos(todosList);
       setLoading(false);
     }, (error) => {
@@ -420,7 +491,7 @@ export default function TodoPage() {
     }
   };
 
-  // Group todos dynamically with recurrence expansion
+  // ✅ UPDATED: Group todos including shared todos with collaboration section
   const getGroupedTodos = (): TodoGroup[] => {
     if (loading || todos.length === 0) {
       return [];
@@ -452,6 +523,17 @@ export default function TodoPage() {
         expandedTodos.push(todo);
       }
     });
+
+    // ✅ ADD SHARED TODOS GROUP
+    const sharedTodos = todos.filter(todo => todo.isShared);
+    if (sharedTodos.length > 0) {
+      groups.push({
+        key: "shared",
+        title: "Shared Todos",
+        todos: sharedTodos,
+        isDateBased: false,
+      });
+    }
 
     // Date-based groups with expanded todos
     const thisWeekTodos = expandedTodos.filter(todo => {
@@ -546,6 +628,15 @@ export default function TodoPage() {
     return result;
   };
 
+  // ✅ ADD: Get collaboration stats for debugging
+  const collaborationStats = {
+    total: todos.length,
+    shared: todos.filter(t => t.isShared).length,
+    regular: todos.filter(t => !t.isShared).length
+  };
+
+  console.log("📊 Todo Stats:", collaborationStats);
+
   return (
     <ProtectedRoute>
       <div className="flex min-h-screen overflow-hidden bg-gray-50">
@@ -573,6 +664,7 @@ export default function TodoPage() {
             currentWeekStartDate={currentWeekStartDate}
             onNavigateWeek={navigateWeek}
             onGoToToday={goToToday}
+            todos={todos}
           />
           
           {/* Calendar Grid */}
@@ -659,7 +751,7 @@ export default function TodoPage() {
                                 key={todo.id} 
                                 todo={todo} 
                                 onClick={() => handleTodoClick(todo)}
-                                onContextMenu={handleCalendarTodoRightClick} // ✅ ADD THIS
+                                onContextMenu={handleCalendarTodoRightClick}
                                 onDelete={(deletedTodo) => {
                                   console.log('Card deleted:', deletedTodo.title);
                                   // Real-time listener will handle the update
@@ -695,7 +787,7 @@ export default function TodoPage() {
                                   <StackedTodoCards 
                                     todos={todoGroup}
                                     onTodoClick={handleTodoClick}
-                                    onTodoContextMenu={handleCalendarTodoRightClick} // ✅ ADD THIS
+                                    onTodoContextMenu={handleCalendarTodoRightClick}
                                   />
                                 </div>
                               );

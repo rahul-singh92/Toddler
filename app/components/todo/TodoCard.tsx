@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { IconRepeat } from "@tabler/icons-react";
+import { IconRepeat, IconUsers } from "@tabler/icons-react";
 import { Todo } from "../../types/todo";
 import DragToDeleteOverlay from "../ui/DragToDeleteOverlay";
 import { doc, deleteDoc } from "firebase/firestore";
@@ -13,7 +13,7 @@ interface TodoCardProps {
   todo: Todo;
   onClick: () => void;
   onDelete?: (todo: Todo) => void;
-  onContextMenu?: (event: React.MouseEvent, todo: Todo) => void; // ✅ ADD THIS
+  onContextMenu?: (event: React.MouseEvent, todo: Todo) => void;
   instanceDate?: Date;
   stackIndex?: number;
   isStacked?: boolean;
@@ -25,7 +25,7 @@ export default function TodoCard({
   todo,
   onClick,
   onDelete,
-  onContextMenu, // ✅ ADD THIS
+  onContextMenu,
   instanceDate,
   stackIndex = 0,
   isStacked = false,
@@ -38,6 +38,9 @@ export default function TodoCard({
   // Manual drag state management
   const [isDragging, setIsDragging] = useState(false);
   const [isOverTrash, setIsOverTrash] = useState(false);
+
+  // Check if todo is shared/collaborative
+  const isSharedTodo = todo.isShared || (todo.sharedWith && todo.sharedWith.length > 0) || todo.collaborationType === 'collaborator';
 
   // Handle todo deletion from Firestore
   const handleTodoDelete = async (todoToDelete: Todo) => {
@@ -87,7 +90,7 @@ export default function TodoCard({
   const isLightColor = (hex: string) => {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
+    const b = parseInt(hex.slice(7), 16);
     
     const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
     return luminance > 0.5;
@@ -155,7 +158,6 @@ export default function TodoCard({
     onClick();
   };
 
-  // ✅ ADD RIGHT-CLICK HANDLER
   const handleRightClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -186,6 +188,14 @@ export default function TodoCard({
       overflow: hidden;
     `;
 
+    // Add collaborate badge to drag image if shared
+    const collaborateBadge = isSharedTodo ? `
+      <div style="position: absolute; bottom: 4px; left: 4px; background: rgba(59, 130, 246, 0.9); color: white; padding: 1px 4px; border-radius: 3px; font-size: 7px; font-weight: 600; display: flex; align-items: center; gap: 2px;">
+        <div style="width: 6px; height: 6px;">👥</div>
+        Collaborate
+      </div>
+    ` : '';
+
     dragImage.innerHTML = `
       <div style="height: 100%; display: flex; flex-direction: column; position: relative;">
         ${todo.recurrence?.type !== 'none' ? `<div style="position: absolute; top: 0; right: 0; font-size: 8px; opacity: 0.7;">🔁</div>` : ''}
@@ -204,6 +214,7 @@ export default function TodoCard({
           ${todo.description}
         </div>` : ''}
         ${todo.completed ? `<div style="position: absolute; bottom: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: ${isLightColor(todo.color) ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.8)'};"></div>` : ''}
+        ${collaborateBadge}
       </div>
     `;
 
@@ -308,7 +319,7 @@ export default function TodoCard({
           draggable={!!todo.id && !isDeleting}
           onDragStart={handleCustomDragStart}
           onDragEnd={handleCustomDragEnd}
-          onContextMenu={handleRightClick} // ✅ ADD THIS
+          onContextMenu={handleRightClick}
           className={`
             h-full w-full p-3 rounded-lg shadow-md transition-all duration-200 relative overflow-hidden
             ${(!isDeleting && !!todo.id) 
@@ -329,12 +340,22 @@ export default function TodoCard({
             </div>
           )}
 
-          {/* Recurring indicator */}
-          {todo.recurrence?.type !== 'none' && (
-            <div className="absolute top-2 right-2">
-              <IconRepeat size={10} style={{ color: timeColor }} />
-            </div>
-          )}
+          {/* Top indicators row */}
+          <div className="absolute top-2 right-2 flex items-center space-x-1">
+            {/* Recurring indicator */}
+            {todo.recurrence?.type !== 'none' && (
+              <div className="flex items-center">
+                <IconRepeat size={10} style={{ color: timeColor }} />
+              </div>
+            )}
+            
+            {/* Collaboration indicator */}
+            {isSharedTodo && (
+              <div className="flex items-center">
+                <IconUsers size={10} style={{ color: timeColor }} />
+              </div>
+            )}
+          </div>
 
           {/* Drag indicator - subtle dots when draggable */}
           {!!todo.id && !isDeleting && (
@@ -351,7 +372,7 @@ export default function TodoCard({
           <div className="h-full flex flex-col">
             {/* Title */}
             <h4 
-              className="font-semibold text-sm mb-1 pr-4 pl-4" 
+              className="font-semibold text-sm mb-1 pr-6 pl-4" 
               style={{ 
                 color: textColor,
                 lineHeight: '1.2'
@@ -365,6 +386,30 @@ export default function TodoCard({
               {displayTime && formatTime(displayTime)}
               {todo.endTime && todo.startTime && ` - ${formatTime(todo.endTime)}`}
             </div>
+
+            {/* Collaborate badge for shared todos */}
+            {isSharedTodo && (
+              <div className="flex items-center space-x-1 mb-2 pl-4">
+                <div 
+                  className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium"
+                  style={{
+                    backgroundColor: isLightColor(todo.color) ? 'rgba(59, 130, 246, 0.9)' : 'rgba(59, 130, 246, 0.8)',
+                    color: 'white'
+                  }}
+                >
+                  <IconUsers size={8} className="mr-1" />
+                  <span className="text-xs font-semibold">Collaborate</span>
+                </div>
+                {todo.sharedBy && (
+                  <img
+                    src={todo.sharedBy.photoURL}
+                    alt={todo.sharedBy.displayName}
+                    className="w-4 h-4 rounded-full border border-white shadow-sm"
+                    title={`Shared by ${todo.sharedBy.displayName}`}
+                  />
+                )}
+              </div>
+            )}
 
             {/* Description for longer events */}
             {todo.description && timeSpan.height !== 'auto' && parseInt(timeSpan.height) > 100 && 
