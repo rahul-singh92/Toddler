@@ -25,7 +25,9 @@ import {
 } from "../utils/dateHelpers";
 import {
   generateRecurringDates,
-  groupOverlappingTodos
+  groupOverlappingTodos,
+  groupAllDayTodos,
+  isAllDayTodo
 } from "../utils/todoHelpers";
 
 function HeaderBar({
@@ -103,8 +105,8 @@ function HeaderBar({
             <button
               onClick={handleShareClick}
               className={`px-4 py-2 rounded-md text-white text-sm font-medium transition-colors ${isShareDropdownVisible
-                  ? 'bg-gray-800'
-                  : 'bg-gray-900 hover:bg-gray-800'
+                ? 'bg-gray-800'
+                : 'bg-gray-900 hover:bg-gray-800'
                 }`}
             >
               Share
@@ -739,27 +741,51 @@ export default function TodoPage() {
                     return (
                       <div key={index} className="relative flex-shrink-0" style={{ minWidth: '180px' }}>
                         {/* All day events */}
+                        {/* All day events - Updated with stacking support */}
                         <div className="min-h-[80px] space-y-2 mb-4">
-                          {dayTodos
-                            .filter(todo => !todo.startTime || todo.startTime.getHours() === 0)
-                            .map(todo => (
-                              <TodoCard
-                                key={todo.id}
-                                todo={todo}
-                                onClick={() => handleTodoClick(todo)}
-                                onContextMenu={handleCalendarTodoRightClick}
-                                onDelete={(deletedTodo) => {
-                                  console.log('Card deleted:', deletedTodo.title);
-                                  // Real-time listener will handle the update
-                                }}
-                              />
-                            ))}
+                          {(() => {
+                            // Get all-day todos (todos without startTime)
+                            const allDayTodos = dayTodos.filter(todo => isAllDayTodo(todo));
+
+                            // Group all-day todos for stacking
+                            const allDayGroups = groupAllDayTodos(allDayTodos);
+
+                            return allDayGroups.map((todoGroup, groupIndex) => {
+                              if (todoGroup.length === 1) {
+                                // Single todo - render normally
+                                const todo = todoGroup[0];
+                                return (
+                                  <TodoCard
+                                    key={todo.id}
+                                    todo={todo}
+                                    onClick={() => handleTodoClick(todo)}
+                                    onContextMenu={handleCalendarTodoRightClick}
+                                    onDelete={(deletedTodo) => {
+                                      console.log('Card deleted:', deletedTodo.title);
+                                      // Real-time listener will handle the update
+                                    }}
+                                  />
+                                );
+                              } else {
+                                // Multiple todos - use StackedTodoCards for grouping
+                                return (
+                                  <StackedTodoCards
+                                    key={`allday-group-${groupIndex}`}
+                                    todos={todoGroup}
+                                    onTodoClick={handleTodoClick}
+                                    onTodoContextMenu={handleCalendarTodoRightClick}
+                                  />
+                                );
+                              }
+                            });
+                          })()}
                         </div>
+
 
                         {/* Time slot events */}
                         <div className="relative" style={{ minHeight: '1360px' }}>
                           {(() => {
-                            const timedTodos = dayTodos.filter(todo => todo.startTime && todo.startTime.getHours() > 0);
+                            const timedTodos = dayTodos.filter(todo => !isAllDayTodo(todo));
                             const overlappingGroups = groupOverlappingTodos(timedTodos);
 
                             return overlappingGroups.map((todoGroup, groupIndex) => {
