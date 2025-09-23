@@ -16,24 +16,24 @@ import { Todo } from "../types/todo";
 import { collection, query, onSnapshot, orderBy, doc, deleteDoc } from "firebase/firestore";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "../lib/firebase";
-import { 
-  getWeekNumber, 
-  getCurrentWeekDates, 
-  isThisWeek, 
-  isSameDay, 
-  isThisMonth 
+import {
+  getWeekNumber,
+  getCurrentWeekDates,
+  isThisWeek,
+  isSameDay,
+  isThisMonth
 } from "../utils/dateHelpers";
-import { 
-  generateRecurringDates, 
-  groupOverlappingTodos 
+import {
+  generateRecurringDates,
+  groupOverlappingTodos
 } from "../utils/todoHelpers";
 
-function HeaderBar({ 
-  currentWeekStartDate, 
-  onNavigateWeek, 
+function HeaderBar({
+  currentWeekStartDate,
+  onNavigateWeek,
   onGoToToday,
   todos
-}: { 
+}: {
   currentWeekStartDate: Date;
   onNavigateWeek: (direction: 'prev' | 'next') => void;
   onGoToToday: () => void;
@@ -41,7 +41,7 @@ function HeaderBar({
 }) {
   const monthYear = currentWeekStartDate.toLocaleString("default", { month: "long", year: "numeric" });
   const week = getWeekNumber(currentWeekStartDate);
-  
+
   // State for share functionality
   const [isShareDropdownVisible, setIsShareDropdownVisible] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -75,13 +75,13 @@ function HeaderBar({
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            <button 
+            <button
               onClick={() => onNavigateWeek('prev')}
               className="p-2 rounded hover:bg-gray-100 transition-colors"
             >
               <IconChevronLeft size={20} stroke={2} className="text-gray-600" />
             </button>
-            <button 
+            <button
               onClick={() => onNavigateWeek('next')}
               className="p-2 rounded hover:bg-gray-100 transition-colors"
             >
@@ -91,27 +91,26 @@ function HeaderBar({
         </div>
 
         <div className="flex space-x-3">
-          <button 
+          <button
             onClick={onGoToToday}
             className="px-4 py-2 rounded-md bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors"
           >
             Today
           </button>
-          
+
           {/* Share Button with Click Toggle */}
           <div className="relative">
-            <button 
+            <button
               onClick={handleShareClick}
-              className={`px-4 py-2 rounded-md text-white text-sm font-medium transition-colors ${
-                isShareDropdownVisible 
-                  ? 'bg-gray-800' 
+              className={`px-4 py-2 rounded-md text-white text-sm font-medium transition-colors ${isShareDropdownVisible
+                  ? 'bg-gray-800'
                   : 'bg-gray-900 hover:bg-gray-800'
-              }`}
+                }`}
             >
               Share
             </button>
-            
-            <ShareDropdown 
+
+            <ShareDropdown
               isVisible={isShareDropdownVisible}
               onClose={handleDropdownClose}
               onCreateShare={handleCreateShare}
@@ -166,7 +165,7 @@ export default function TodoPage() {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Edit functionality states
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
@@ -181,11 +180,11 @@ export default function TodoPage() {
     position: { x: 0, y: 0 },
     todo: null
   });
-  
+
   // Scroll container refs for synchronization
   const headerScrollRef = useRef<HTMLDivElement>(null);
   const contentScrollRef = useRef<HTMLDivElement>(null);
-  
+
   // Track current week start (Monday)
   const [currentWeekStartDate, setCurrentWeekStartDate] = useState(() => getMondayOfWeek(new Date()));
   const [currentWeekDates, setCurrentWeekDates] = useState(() => getWeekDates(getMondayOfWeek(new Date())));
@@ -201,7 +200,7 @@ export default function TodoPage() {
   const centerTodayColumn = () => {
     const today = new Date();
     const todayIndex = currentWeekDates.findIndex(date => isSameDay(date, today));
-    
+
     if (todayIndex === -1 || !headerScrollRef.current || !contentScrollRef.current) {
       return;
     }
@@ -210,7 +209,7 @@ export default function TodoPage() {
     requestAnimationFrame(() => {
       const headerContainer = headerScrollRef.current!;
       const contentContainer = contentScrollRef.current!;
-      
+
       // Check if container has proper dimensions
       const containerWidth = contentContainer.clientWidth;
       if (containerWidth === 0) {
@@ -222,15 +221,15 @@ export default function TodoPage() {
       const dayWidth = 180; // minWidth from styling
       const gap = 16; // gap-4 = 16px
       const dayTotalWidth = dayWidth + gap;
-      
+
       // Calculate position to center today's column
       const todayLeftEdge = todayIndex * dayTotalWidth;
       const scrollPosition = todayLeftEdge - (containerWidth / 2) + (dayWidth / 2);
-      
+
       // Ensure we don't scroll beyond bounds
       const maxScroll = Math.max(0, (currentWeekDates.length * dayTotalWidth) - containerWidth);
       const finalScrollPosition = Math.max(0, Math.min(scrollPosition, maxScroll));
-      
+
       // Scroll both containers simultaneously
       headerContainer.scrollTo({
         left: finalScrollPosition,
@@ -287,7 +286,7 @@ export default function TodoPage() {
   const goToToday = () => {
     const todayMondayStart = getMondayOfWeek(new Date());
     setCurrentWeekStartDate(todayMondayStart);
-    
+
     // Force re-centering after state update
     setTimeout(() => {
       centerTodayColumn();
@@ -299,17 +298,17 @@ export default function TodoPage() {
     const handleWheel = (e: WheelEvent) => {
       const target = e.target as Element;
       const isOverScrollContainer = target?.closest('.horizontal-scroll-container');
-      
+
       if (isOverScrollContainer) {
         const container = isOverScrollContainer as HTMLElement;
         const canScrollHorizontally = container.scrollWidth > container.clientWidth;
         const isVerticalScroll = Math.abs(e.deltaY) > Math.abs(e.deltaX);
-        
+
         if (canScrollHorizontally && isVerticalScroll) {
           if (e.shiftKey || Math.abs(e.deltaX) > 0) {
             e.preventDefault();
             const scrollAmount = e.deltaY;
-            
+
             // Scroll both containers
             if (headerScrollRef.current) {
               headerScrollRef.current.scrollBy({
@@ -378,7 +377,7 @@ export default function TodoPage() {
             endDate: data.recurrence?.endDate?.toDate?.() || data.recurrence?.endDate
           },
           ownerId: data.ownerId,
-          
+
           // ✅ ADD COLLABORATION FIELDS
           isShared: data.isShared || false,
           originalId: data.originalId,
@@ -482,7 +481,7 @@ export default function TodoPage() {
       const todoRef = doc(db, 'users', user.uid, 'todos', originalTodoId);
       await deleteDoc(todoRef);
       console.log(`✅ Successfully deleted todo: "${todo.title}"`);
-      
+
       // Close context menu
       handleCloseCalendarContextMenu();
     } catch (error: any) {
@@ -498,12 +497,12 @@ export default function TodoPage() {
     }
 
     const groups: TodoGroup[] = [];
-    
+
     // Expand recurring todos
     const expandedTodos: Todo[] = [];
     const viewStartDate = new Date(Math.min(...currentWeekDates.map(d => d.getTime())));
     const viewEndDate = new Date(Math.max(...currentWeekDates.map(d => d.getTime())));
-    
+
     todos.forEach(todo => {
       if (todo.recurrence?.type !== 'none' && todo.startTime) {
         // Generate recurring instances
@@ -512,10 +511,10 @@ export default function TodoPage() {
           expandedTodos.push({
             ...todo,
             id: `${todo.id}-${date.getTime()}`, // Unique ID for each instance
-            startTime: new Date(date.getFullYear(), date.getMonth(), date.getDate(), 
-                              todo.startTime!.getHours(), todo.startTime!.getMinutes()),
-            endTime: todo.endTime ? new Date(date.getFullYear(), date.getMonth(), date.getDate(), 
-                                           todo.endTime.getHours(), todo.endTime.getMinutes()) : undefined
+            startTime: new Date(date.getFullYear(), date.getMonth(), date.getDate(),
+              todo.startTime!.getHours(), todo.startTime!.getMinutes()),
+            endTime: todo.endTime ? new Date(date.getFullYear(), date.getMonth(), date.getDate(),
+              todo.endTime.getHours(), todo.endTime.getMinutes()) : undefined
           });
         });
       } else {
@@ -568,7 +567,7 @@ export default function TodoPage() {
 
     // Category-based groups with original todos (no expansion for sidebar)
     const categoriesMap = new Map<string, Todo[]>();
-    
+
     todos.forEach(todo => {
       const category = todo.category || 'uncategorized';
       if (!categoriesMap.has(category)) {
@@ -596,20 +595,20 @@ export default function TodoPage() {
     const result: Todo[] = [];
     const viewStartDate = new Date(Math.min(...currentWeekDates.map(d => d.getTime())));
     const viewEndDate = new Date(Math.max(...currentWeekDates.map(d => d.getTime())));
-    
+
     todos.forEach(todo => {
       if (todo.recurrence?.type !== 'none' && todo.startTime) {
         const recurringDates = generateRecurringDates(todo, viewStartDate, viewEndDate);
         const matchingDate = recurringDates.find(recurDate => isSameDay(recurDate, date));
-        
+
         if (matchingDate) {
           result.push({
             ...todo,
             id: `${todo.id}-${matchingDate.getTime()}`,
-            startTime: new Date(matchingDate.getFullYear(), matchingDate.getMonth(), matchingDate.getDate(), 
-                              todo.startTime.getHours(), todo.startTime.getMinutes()),
-            endTime: todo.endTime ? new Date(matchingDate.getFullYear(), matchingDate.getMonth(), matchingDate.getDate(), 
-                                           todo.endTime.getHours(), todo.endTime.getMinutes()) : undefined
+            startTime: new Date(matchingDate.getFullYear(), matchingDate.getMonth(), matchingDate.getDate(),
+              todo.startTime.getHours(), todo.startTime.getMinutes()),
+            endTime: todo.endTime ? new Date(matchingDate.getFullYear(), matchingDate.getMonth(), matchingDate.getDate(),
+              todo.endTime.getHours(), todo.endTime.getMinutes()) : undefined
           });
         }
       } else {
@@ -624,7 +623,7 @@ export default function TodoPage() {
         }
       }
     });
-    
+
     return result;
   };
 
@@ -653,28 +652,28 @@ export default function TodoPage() {
         />
 
         {/* Main content area */}
-        <motion.main 
-          initial={false} 
-          animate={{ marginLeft: sidebarCollapsed ? "5rem" : "23rem" }} 
-          transition={{ duration: 0.3, ease: "easeInOut" }} 
+        <motion.main
+          initial={false}
+          animate={{ marginLeft: sidebarCollapsed ? "5rem" : "23rem" }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
           className="flex-1 overflow-x-hidden bg-white"
         >
           {/* Fixed top header */}
-          <HeaderBar 
+          <HeaderBar
             currentWeekStartDate={currentWeekStartDate}
             onNavigateWeek={navigateWeek}
             onGoToToday={goToToday}
             todos={todos}
           />
-          
+
           {/* Calendar Grid */}
           <div className="p-6">
             {/* Synchronized Scrollable Date Headers Row */}
             <div className="grid grid-cols-1 gap-4 mb-6" style={{ gridTemplateColumns: 'auto 1fr' }}>
               <div></div>
-              
+
               {/* Horizontally scrollable date headers */}
-              <div 
+              <div
                 ref={headerScrollRef}
                 className="overflow-x-auto scrollbar-hide horizontal-scroll-container"
                 onScroll={handleHeaderScroll}
@@ -682,23 +681,20 @@ export default function TodoPage() {
                 <div className="flex gap-4 min-w-max">
                   {currentWeekDates.map((date, index) => {
                     const isToday = isSameDay(date, new Date());
-                    
+
                     return (
                       <div key={index} className="text-center flex-shrink-0" style={{ minWidth: '180px' }}>
-                        <div className={`text-5xl font-bold mb-1 ${
-                          isToday ? 'text-black' : 'text-gray-400'
-                        }`}>
+                        <div className={`text-5xl font-bold mb-1 ${isToday ? 'text-black' : 'text-gray-400'
+                          }`}>
                           {date.getDate().toString().padStart(2, '0')}
                         </div>
-                        <div className={`text-sm font-medium lowercase tracking-wide ${
-                          isToday ? 'text-black font-bold' : 'text-gray-500 font-normal'
-                        }`}>
+                        <div className={`text-sm font-medium lowercase tracking-wide ${isToday ? 'text-black font-bold' : 'text-gray-500 font-normal'
+                          }`}>
                           {date.toLocaleDateString('en-US', { weekday: 'short' })}
                         </div>
                         <div className="flex justify-center mt-2">
-                          <div className={`w-0.5 h-4 ${
-                            isToday ? 'bg-black' : 'bg-gray-300'
-                          }`}></div>
+                          <div className={`w-0.5 h-4 ${isToday ? 'bg-black' : 'bg-gray-300'
+                            }`}></div>
                         </div>
                       </div>
                     );
@@ -721,7 +717,7 @@ export default function TodoPage() {
                   else if (hour === 12) timeLabel = '12 pm';
                   else if (hour < 12) timeLabel = `${hour} am`;
                   else timeLabel = `${hour - 12} pm`;
-                  
+
                   return (
                     <div key={hour} className="h-16 flex items-start">
                       <span className="text-xs text-gray-500 font-medium">{timeLabel}</span>
@@ -731,7 +727,7 @@ export default function TodoPage() {
               </div>
 
               {/* Horizontally scrollable days container */}
-              <div 
+              <div
                 ref={contentScrollRef}
                 className="overflow-x-auto scrollbar-hide horizontal-scroll-container"
                 onScroll={handleContentScroll}
@@ -739,7 +735,7 @@ export default function TodoPage() {
                 <div className="flex gap-4 min-w-max">
                   {currentWeekDates.map((date, index) => {
                     const dayTodos = getTodosForDate(date);
-                    
+
                     return (
                       <div key={index} className="relative flex-shrink-0" style={{ minWidth: '180px' }}>
                         {/* All day events */}
@@ -747,9 +743,9 @@ export default function TodoPage() {
                           {dayTodos
                             .filter(todo => !todo.startTime || todo.startTime.getHours() === 0)
                             .map(todo => (
-                              <TodoCard 
-                                key={todo.id} 
-                                todo={todo} 
+                              <TodoCard
+                                key={todo.id}
+                                todo={todo}
                                 onClick={() => handleTodoClick(todo)}
                                 onContextMenu={handleCalendarTodoRightClick}
                                 onDelete={(deletedTodo) => {
@@ -765,26 +761,26 @@ export default function TodoPage() {
                           {(() => {
                             const timedTodos = dayTodos.filter(todo => todo.startTime && todo.startTime.getHours() > 0);
                             const overlappingGroups = groupOverlappingTodos(timedTodos);
-                            
+
                             return overlappingGroups.map((todoGroup, groupIndex) => {
                               const firstTodo = todoGroup[0];
                               const startHour = firstTodo.startTime!.getHours();
                               const startMinutes = firstTodo.startTime!.getMinutes();
-                              
+
                               const hoursFromStart = startHour - 6;
                               const minutesFromStart = startMinutes;
                               const topOffset = (hoursFromStart * 80) + (minutesFromStart / 60 * 80);
-                              
+
                               return (
                                 <div
                                   key={`group-${groupIndex}`}
                                   className="absolute w-full"
-                                  style={{ 
+                                  style={{
                                     top: `${Math.max(topOffset, 0)}px`,
                                     zIndex: 10 + groupIndex
                                   }}
                                 >
-                                  <StackedTodoCards 
+                                  <StackedTodoCards
                                     todos={todoGroup}
                                     onTodoClick={handleTodoClick}
                                     onTodoContextMenu={handleCalendarTodoRightClick}
@@ -796,10 +792,10 @@ export default function TodoPage() {
 
                           {/* Background grid lines */}
                           {Array.from({ length: 17 }, (_, hourIndex) => (
-                            <div 
-                              key={hourIndex} 
+                            <div
+                              key={hourIndex}
                               className="absolute w-full border-t border-gray-100 pointer-events-none"
-                              style={{ 
+                              style={{
                                 top: `${hourIndex * 80}px`,
                                 height: '64px'
                               }}
@@ -816,14 +812,14 @@ export default function TodoPage() {
         </motion.main>
 
         {/* Create New Todo Modal */}
-        <TodoModal 
+        <TodoModal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           onTodoAdded={handleTodoAdded}
         />
 
         {/* Edit Todo Modal */}
-        <TodoModal 
+        <TodoModal
           isOpen={isEditModalOpen}
           onClose={handleCloseEditModal}
           onTodoAdded={handleTodoUpdated}

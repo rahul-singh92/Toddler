@@ -3,10 +3,11 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "../../lib/firebase";
+import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { doc, getDoc, collection, query, where, onSnapshot, updateDoc, writeBatch, arrayUnion, setDoc, deleteDoc } from "firebase/firestore";
 import { TodoInvitation, CollaboratorInfo } from "../../types/collaboration";
 import { Todo } from "../../types/todo";
-import { IconUsers, IconCalendar, IconClock, IconTag, IconArrowLeft, IconCheck, IconX, IconEye, IconEdit, IconShare, IconExternalLink } from "@tabler/icons-react";
+import { IconUsers, IconCalendar, IconClock, IconTag, IconArrowLeft, IconCheck, IconX, IconEye, IconEdit, IconShare, IconExternalLink, IconLogin } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "framer-motion";
 import TodoCard from "../../components/todo/TodoCard";
 import { isSameDay, isThisWeek, isThisMonth } from "../../utils/dateHelpers";
@@ -36,8 +37,10 @@ export default function SharedTodoPage() {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [filter, setFilter] = useState<'all' | 'week' | 'month' | 'completed'>('all');
   
-  // New state for joining process
+  // New state for joining process and authentication
   const [isJoining, setIsJoining] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [shouldAutoAcceptAfterAuth, setShouldAutoAcceptAfterAuth] = useState(false);
 
   // Helper function to clean data for Firestore (remove undefined values)
   const cleanFirestoreData = (obj: any): any => {
@@ -55,6 +58,13 @@ export default function SharedTodoPage() {
     return cleaned;
   };
 
+  // ✅ Store invitation link for post-auth redirect
+  useEffect(() => {
+    if (typeof window !== 'undefined' && shareId) {
+      sessionStorage.setItem('pendingInvitation', shareId as string);
+    }
+  }, [shareId]);
+
   useEffect(() => {
     const fetchSharedData = async () => {
       if (!shareId || typeof shareId !== 'string') {
@@ -63,7 +73,7 @@ export default function SharedTodoPage() {
       }
 
       try {
-        // Fetch invitation/share metadata
+        // Fetch invitation/share metadata (even for unauthenticated users)
         const inviteDoc = await getDoc(doc(db, 'todoInvitations', shareId));
         
         if (!inviteDoc.exists()) {
@@ -92,73 +102,79 @@ export default function SharedTodoPage() {
           return;
         }
 
-        // Determine user role
-        let userRole: 'viewer' | 'editor' | 'none' = 'none';
+        // ✅ Store invitation data even for unauthenticated users
+        setState(prev => ({ 
+          ...prev, 
+          invitation: invitationData, 
+          loading: false
+        }));
+
+        // Only fetch todos and determine role if user is authenticated
         if (user) {
+          // Determine user role
+          let userRole: 'viewer' | 'editor' | 'none' = 'none';
           const collaborator = invitationData.acceptedUsers.find(u => u.userId === user.uid);
           if (collaborator) {
             userRole = collaborator.role === 'admin' ? 'editor' : collaborator.role;
           } else if (invitationData.createdBy === user.uid) {
             userRole = 'editor'; // Owner has editor access
           }
-        }
 
-        setState(prev => ({ 
-          ...prev, 
-          invitation: invitationData, 
-          userRole 
-        }));
+          setState(prev => ({ ...prev, userRole }));
 
-        // Set up real-time listener for todos
-        if (invitationData.todoIds.length > 0) {
-          const todosRef = collection(db, 'users', invitationData.createdBy, 'todos');
-          const todosQuery = query(todosRef, where('__name__', 'in', invitationData.todoIds));
+          // Set up real-time listener for todos
+          if (invitationData.todoIds.length > 0) {
+            const todosRef = collection(db, 'users', invitationData.createdBy, 'todos');
+            const todosQuery = query(todosRef, where('__name__', 'in', invitationData.todoIds));
 
-          const unsubscribe = onSnapshot(todosQuery, (snapshot) => {
-            const sharedTodos: Todo[] = [];
-            snapshot.forEach((todoDoc) => {
-              const data = todoDoc.data();
-              sharedTodos.push({
-                id: todoDoc.id,
-                title: data.title,
-                description: data.description,
-                category: data.category,
-                links: data.links || [],
-                startTime: data.startTime?.toDate ? data.startTime.toDate() : data.startTime,
-                endTime: data.endTime?.toDate ? data.endTime.toDate() : data.endTime,
-                completed: data.completed,
-                priority: data.priority,
-                color: data.color,
-                style: data.style,
-                createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt || new Date(),
-                updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt || new Date(),
-                sharedWith: data.sharedWith || [],
-                recurrence: {
-                  type: data.recurrence?.type || 'none',
-                  interval: data.recurrence?.interval,
-                  endDate: data.recurrence?.endDate?.toDate ? data.recurrence.endDate.toDate() : data.recurrence?.endDate
-                },
-                ownerId: invitationData.createdBy,
+            const unsubscribe = onSnapshot(todosQuery, (snapshot) => {
+              const sharedTodos: Todo[] = [];
+              snapshot.forEach((todoDoc) => {
+                const data = todoDoc.data();
+                sharedTodos.push({
+                  id: todoDoc.id,
+                  title: data.title,
+                  description: data.description,
+                  category: data.category,
+                  links: data.links || [],
+                  startTime: data.startTime?.toDate ? data.startTime.toDate() : data.startTime,
+                  endTime: data.endTime?.toDate ? data.endTime.toDate() : data.endTime,
+                  completed: data.completed,
+                  priority: data.priority,
+                  color: data.color,
+                  style: data.style,
+                  createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt || new Date(),
+                  updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt || new Date(),
+                  sharedWith: data.sharedWith || [],
+                  recurrence: {
+                    type: data.recurrence?.type || 'none',
+                    interval: data.recurrence?.interval,
+                    endDate: data.recurrence?.endDate?.toDate ? data.recurrence.endDate.toDate() : data.recurrence?.endDate
+                  },
+                  ownerId: invitationData.createdBy,
+                });
               });
+              
+              setState(prev => ({ 
+                ...prev, 
+                todos: sharedTodos
+              }));
+            }, (error) => {
+              console.error("Error fetching shared todos:", error);
+              setState(prev => ({ 
+                ...prev, 
+                error: "Failed to load shared todos"
+              }));
             });
-            
-            setState(prev => ({ 
-              ...prev, 
-              todos: sharedTodos, 
-              loading: false 
-            }));
-          }, (error) => {
-            console.error("Error fetching shared todos:", error);
-            setState(prev => ({ 
-              ...prev, 
-              error: "Failed to load shared todos", 
-              loading: false 
-            }));
-          });
 
-          return () => unsubscribe();
-        } else {
-          setState(prev => ({ ...prev, loading: false }));
+            return () => unsubscribe();
+          }
+
+          // ✅ Auto-accept invitation if user just signed in
+          if (shouldAutoAcceptAfterAuth && userRole === 'none') {
+            setShouldAutoAcceptAfterAuth(false);
+            handleAcceptInvitation();
+          }
         }
 
       } catch (error) {
@@ -171,8 +187,27 @@ export default function SharedTodoPage() {
       }
     };
 
-    fetchSharedData();
-  }, [shareId, user]);
+    // Only fetch data after auth loading is complete
+    if (!authLoading) {
+      fetchSharedData();
+    }
+  }, [shareId, user, authLoading, shouldAutoAcceptAfterAuth]);
+
+  // ✅ Handle Google Sign In
+  const handleSignIn = async () => {
+    setIsSigningIn(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      
+      // Set flag to auto-accept invitation after successful sign in
+      setShouldAutoAcceptAfterAuth(true);
+    } catch (error) {
+      console.error("Sign in error:", error);
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
 
   // Handle todo completion toggle (only if user has editor role)
   const handleTodoToggle = async (todo: Todo) => {
@@ -208,10 +243,6 @@ export default function SharedTodoPage() {
 
     try {
       console.log("🤝 Starting invitation acceptance process...");
-      console.log("User ID:", user.uid);
-      console.log("Invitation ID:", state.invitation.id);
-      console.log("Creator ID:", state.invitation.createdBy);
-      console.log("Todo count:", state.todos.length);
 
       // Create collaborator info
       const collaboratorInfo: CollaboratorInfo = {
@@ -223,15 +254,10 @@ export default function SharedTodoPage() {
         role: 'editor'
       };
 
-      console.log("👤 Collaborator info:", collaboratorInfo);
-
       // Get owner info for sharedBy field
-      console.log("🔍 Fetching owner info...");
       const ownerRef = doc(db, 'users', state.invitation.createdBy);
       const ownerSnap = await getDoc(ownerRef);
       const ownerData = ownerSnap.exists() ? ownerSnap.data() : null;
-
-      console.log("👑 Owner data:", ownerData ? "Found" : "Not found");
 
       const sharedByInfo = {
         userId: state.invitation.createdBy,
@@ -240,100 +266,10 @@ export default function SharedTodoPage() {
         photoURL: ownerData?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${state.invitation.createdBy}`
       };
 
-      console.log("📋 SharedBy info:", sharedByInfo);
-
-      // Test individual operations first to isolate the issue
-      console.log("🧪 TESTING INDIVIDUAL OPERATIONS...");
-
-      // Test 1: Try updating invitation only
-      try {
-        console.log("🧪 Test 1: Updating invitation...");
-        const inviteRef = doc(db, 'todoInvitations', state.invitation.id);
-        await updateDoc(inviteRef, {
-          acceptedUsers: arrayUnion(collaboratorInfo),
-          status: 'active'
-        });
-        console.log("✅ Test 1 PASSED: Invitation updated successfully");
-      } catch (error) {
-        console.error("❌ Test 1 FAILED: Error updating invitation:", error);
-        throw new Error("Failed at invitation update");
-      }
-
-      // Test 2: Try updating one original todo
-      if (state.todos.length > 0 && state.todos[0].id) {
-        try {
-          console.log("🧪 Test 2: Updating original todo...");
-          const firstTodoRef = doc(db, 'users', state.invitation.createdBy, 'todos', state.todos[0].id);
-          await updateDoc(firstTodoRef, {
-            sharedWith: arrayUnion(collaboratorInfo)
-          });
-          console.log("✅ Test 2 PASSED: Original todo updated successfully");
-        } catch (error) {
-          console.error("❌ Test 2 FAILED: Error updating original todo:", error);
-          console.error("Todo path:", `users/${state.invitation.createdBy}/todos/${state.todos[0].id}`);
-          throw new Error("Failed at original todo update");
-        }
-      }
-
-      // Test 3: Try creating one new todo
-      try {
-        console.log("🧪 Test 3: Creating new todo...");
-        const testTodo = state.todos[0];
-        const newTodoRef = doc(collection(db, 'users', user.uid, 'todos'));
-        
-        const sharedTodo = {
-          title: testTodo.title + " (Test)",
-          description: testTodo.description || "",
-          category: testTodo.category || "",
-          links: testTodo.links || [],
-          startTime: testTodo.startTime || null,
-          endTime: testTodo.endTime || null,
-          completed: testTodo.completed || false,
-          priority: testTodo.priority || 'medium',
-          color: testTodo.color || '#6366f1',
-          style: testTodo.style || null,
-          recurrence: {
-            type: testTodo.recurrence?.type || 'none',
-            interval: testTodo.recurrence?.interval || null,
-            endDate: testTodo.recurrence?.endDate || null
-          },
-          sharedWith: [collaboratorInfo],
-          
-          // Collaboration fields
-          isShared: true,
-          originalId: testTodo.id,
-          originalOwnerId: state.invitation.createdBy,
-          collaborationType: 'collaborator' as const,
-          sharedBy: sharedByInfo,
-          ownerId: user.uid,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-        
-        // Clean the data before saving
-        const cleanedTodo = cleanFirestoreData(sharedTodo);
-        console.log("📝 Test todo data:", cleanedTodo);
-        
-        await setDoc(newTodoRef, cleanedTodo);
-        console.log("✅ Test 3 PASSED: New todo created successfully");
-        
-        // Clean up test todo
-        await deleteDoc(newTodoRef);
-        console.log("🧹 Test todo cleaned up");
-        
-      } catch (error) {
-        console.error("❌ Test 3 FAILED: Error creating new todo:", error);
-        console.error("User path:", `users/${user.uid}/todos`);
-        throw new Error("Failed at new todo creation");
-      }
-
-      console.log("🎉 ALL TESTS PASSED! Proceeding with batch operation...");
-
-      // Now proceed with the full batch operation
+      // Use batch write for all operations
       const batch = writeBatch(db);
 
       // 1. Update invitation with accepted user
-      console.log("📦 Batch: Adding invitation update...");
       const inviteRef = doc(db, 'todoInvitations', state.invitation.id);
       batch.update(inviteRef, {
         acceptedUsers: arrayUnion(collaboratorInfo),
@@ -341,7 +277,6 @@ export default function SharedTodoPage() {
       });
 
       // 2. Update original todos with new collaborator
-      console.log("📦 Batch: Adding original todos updates...");
       for (const todo of state.todos) {
         if (todo.id) {
           const originalTodoRef = doc(db, 'users', state.invitation.createdBy, 'todos', todo.id);
@@ -352,7 +287,6 @@ export default function SharedTodoPage() {
       }
 
       // 3. Copy shared todos to accepting user's collection
-      console.log("📦 Batch: Adding new todos creation...");
       for (const todo of state.todos) {
         const newTodoRef = doc(collection(db, 'users', user.uid, 'todos'));
         
@@ -390,10 +324,14 @@ export default function SharedTodoPage() {
         batch.set(newTodoRef, cleanedTodo);
       }
 
-      console.log("📦 Committing batch with", state.todos.length * 2 + 1, "operations...");
       await batch.commit();
 
       console.log("✅ Successfully accepted invitation and copied todos!");
+
+      // Clear the pending invitation
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('pendingInvitation');
+      }
 
       // Show success state briefly before redirect
       setState(prev => ({ ...prev, userRole: 'editor' }));
@@ -405,10 +343,6 @@ export default function SharedTodoPage() {
 
     } catch (error: any) {
       console.error("❌ Error accepting invitation:", error);
-      console.error("Error code:", error.code);
-      console.error("Error message:", error.message);
-      console.error("Full error:", error);
-      
       setState(prev => ({ 
         ...prev, 
         error: `Failed to join collaboration: ${error.message || 'Unknown error'}` 
@@ -463,7 +397,8 @@ export default function SharedTodoPage() {
     return date < new Date() && !isSameDay(date, new Date()) && !todo.completed;
   });
 
-  if (authLoading || state.loading) {
+  // ✅ Show loading while auth is loading
+  if (authLoading || (state.loading && !state.invitation)) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -474,6 +409,7 @@ export default function SharedTodoPage() {
     );
   }
 
+  // ✅ Show error state
   if (state.error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -496,6 +432,93 @@ export default function SharedTodoPage() {
             >
               Retry
             </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ Show login required state for unauthenticated users
+  if (!user && state.invitation) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <div className="bg-white border-b border-gray-200">
+          <div className="max-w-4xl mx-auto px-6 py-8">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <IconUsers size={32} className="text-blue-600" />
+              </div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">You've been invited to collaborate!</h1>
+              <p className="text-gray-600 mb-6">
+                {state.invitation.title && (
+                  <>Join "<strong>{state.invitation.title}</strong>" to start collaborating on todos</>
+                )}
+              </p>
+            </div>
+
+            {/* Invitation Preview */}
+            <div className="max-w-md mx-auto bg-gray-50 rounded-lg p-6 mb-8">
+              <div className="text-center mb-4">
+                <h3 className="font-semibold text-gray-900 mb-1">{state.invitation.title}</h3>
+                {state.invitation.description && (
+                  <p className="text-sm text-gray-600">{state.invitation.description}</p>
+                )}
+              </div>
+              
+              <div className="flex items-center justify-center space-x-6 text-sm text-gray-500">
+                <div className="flex items-center space-x-1">
+                  <IconCalendar size={14} />
+                  <span>{state.invitation.todoIds.length} todos</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <IconUsers size={14} />
+                  <span>{state.invitation.acceptedUsers.length} members</span>
+                </div>
+                {state.invitation.expiresAt && (
+                  <div className="flex items-center space-x-1">
+                    <IconClock size={14} />
+                    <span>Expires {state.invitation.expiresAt.toLocaleDateString()}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Sign In Section */}
+            <div className="max-w-sm mx-auto">
+              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Sign in to join</h3>
+                <p className="text-sm text-gray-600 mb-6">
+                  You need to sign in to accept this invitation and start collaborating.
+                </p>
+                
+                <button
+                  onClick={handleSignIn}
+                  disabled={isSigningIn}
+                  className={`w-full flex items-center justify-center space-x-2 px-4 py-3 border border-gray-300 rounded-lg text-sm font-medium transition-colors ${
+                    isSigningIn
+                      ? 'bg-gray-50 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {isSigningIn ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                      <span>Signing in...</span>
+                    </>
+                  ) : (
+                    <>
+                      <IconLogin size={16} />
+                      <span>Sign in with Google</span>
+                    </>
+                  )}
+                </button>
+                
+                <p className="text-xs text-gray-500 mt-4">
+                  After signing in, you'll automatically join this collaboration.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -592,19 +615,10 @@ export default function SharedTodoPage() {
                   <span>Joined! Redirecting...</span>
                 </div>
               )}
-
-              {/* Sign In Button */}
-              {!user && (
-                <button
-                  onClick={() => {/* Add your auth flow */}}
-                  className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
-                >
-                  Sign In
-                </button>
-              )}
             </div>
           </div>
 
+          {/* Rest of your collaboration info and content remains the same */}
           {/* Collaboration Info */}
           <div className="flex items-center space-x-6 mt-4 pt-4 border-t border-gray-100">
             <div className="flex items-center space-x-2 text-sm text-gray-600">
