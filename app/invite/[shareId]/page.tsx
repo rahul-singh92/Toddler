@@ -7,10 +7,11 @@ import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { doc, getDoc, collection, query, where, onSnapshot, updateDoc, writeBatch, arrayUnion, setDoc, deleteDoc } from "firebase/firestore";
 import { TodoInvitation, CollaboratorInfo } from "../../types/collaboration";
 import { Todo } from "../../types/todo";
-import { IconUsers, IconCalendar, IconClock, IconTag, IconArrowLeft, IconCheck, IconX, IconEye, IconEdit, IconShare, IconExternalLink, IconLogin } from "@tabler/icons-react";
+import { IconUsers, IconCalendar, IconClock, IconTag, IconArrowLeft, IconCheck, IconX, IconEye, IconEdit, IconExternalLink, IconLogin } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "framer-motion";
 import TodoCard from "../../components/todo/TodoCard";
 import { isSameDay, isThisWeek, isThisMonth } from "../../utils/dateHelpers";
+import Image from "next/image";
 
 interface SharedTodoPageState {
   invitation: TodoInvitation | null;
@@ -18,6 +19,108 @@ interface SharedTodoPageState {
   loading: boolean;
   error: string;
   userRole: 'viewer' | 'editor' | 'none';
+}
+
+function HeaderBar({ 
+  invitation,
+  userRole,
+  onAcceptInvitation,
+  onSignIn,
+  isJoining,
+  isSigningIn,
+  user
+}: { 
+  invitation: TodoInvitation | null;
+  userRole: 'viewer' | 'editor' | 'none';
+  onAcceptInvitation: () => void;
+  onSignIn: () => void;
+  isJoining: boolean;
+  isSigningIn: boolean;
+  user: any;
+}) {
+  return (
+    <div className="sticky top-0 z-30 bg-[#1A1A1A] px-8 py-6 border-b border-gray-800">
+      <div className="flex flex-col space-y-4">
+        {/* Logo Row - Full width, centered */}
+        <div className="flex justify-center">
+          <Image 
+            src="/images/Logo.svg" 
+            alt="Logo" 
+            width={200} 
+            height={200}
+            priority
+            style={{height: "auto"}}
+            className="drop-shadow-lg" 
+          />
+        </div>
+        
+        {/* Content Row - Title and Actions */}
+        <div className="flex items-center justify-between">
+          {/* Left section with Title */}
+          <div className="flex items-center space-x-4">
+            <h1 className="text-2xl font-bold text-white">{invitation?.title || 'Shared Todos'}</h1>
+            {invitation?.description && (
+              <>
+                <span className="text-4xl leading-none text-gray-600">/</span>
+                <span className="font-semibold text-lg text-[#C8A2D6]">{invitation.description}</span>
+              </>
+            )}
+          </div>
+
+          {/* Right section with actions */}
+          <div className="flex space-x-3">
+            {/* Status Badge */}
+            <div className={`px-4 py-2 rounded-md text-xs font-medium ${
+              userRole === 'editor' 
+                ? 'bg-green-900/30 text-green-400 border border-green-700' 
+                : userRole === 'viewer' 
+                ? 'bg-blue-900/30 text-blue-400 border border-blue-700' 
+                : 'bg-gray-800 text-gray-300 border border-gray-700'
+            }`}>
+              {userRole === 'editor' ? 'Editor' : userRole === 'viewer' ? 'Viewer' : 'Guest'}
+            </div>
+
+            {/* Join Collaboration Button */}
+            {userRole === 'none' && user && (
+              <button
+                onClick={onAcceptInvitation}
+                disabled={isJoining}
+                className={`px-4 py-2 text-white text-sm font-medium rounded-md transition-colors ${
+                  isJoining 
+                    ? 'bg-gray-700 cursor-not-allowed' 
+                    : 'bg-[#C8A2D6] hover:bg-[#B591C8] shadow-lg'
+                }`}
+              >
+                {isJoining ? 'Joining...' : 'Join Collaboration'}
+              </button>
+            )}
+
+            {/* Success state for joined users */}
+            {userRole === 'editor' && isJoining && (
+              <div className="px-4 py-2 bg-green-900/30 text-green-400 text-sm font-medium rounded-md border border-green-700">
+                Joined! Redirecting...
+              </div>
+            )}
+
+            {/* Sign In Button */}
+            {!user && (
+              <button
+                onClick={onSignIn}
+                disabled={isSigningIn}
+                className={`px-4 py-2 text-white text-sm font-medium rounded-md transition-colors ${
+                  isSigningIn 
+                    ? 'bg-gray-700 cursor-not-allowed' 
+                    : 'bg-[#C8A2D6] hover:bg-[#B591C8] shadow-lg'
+                }`}
+              >
+                {isSigningIn ? 'Signing in...' : 'Sign In'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function SharedTodoPage() {
@@ -224,7 +327,7 @@ export default function SharedTodoPage() {
     }
   };
 
-  // ✅ UPDATED: Handle accepting invitation directly with comprehensive debugging
+  // ✅ UPDATED: Handle accepting invitation directly
   const handleAcceptInvitation = async () => {
     if (!user || !state.invitation) {
       console.error("User not authenticated or invitation not loaded");
@@ -352,17 +455,6 @@ export default function SharedTodoPage() {
     }
   };
 
-  // Handle sharing this link
-  const handleShareLink = async () => {
-    const currentUrl = window.location.href;
-    try {
-      await navigator.clipboard.writeText(currentUrl);
-      console.log("Link copied to clipboard");
-    } catch (error) {
-      console.error("Failed to copy link:", error);
-    }
-  };
-
   // Filter todos based on selected filter
   const getFilteredTodos = () => {
     return state.todos.filter(todo => {
@@ -397,38 +489,38 @@ export default function SharedTodoPage() {
     return date < new Date() && !isSameDay(date, new Date()) && !todo.completed;
   });
 
-  // ✅ Show loading while auth is loading
+  // ✅ Show loading while auth is loading (Dark Theme)
   if (authLoading || (state.loading && !state.invitation)) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center">
         <div className="text-center">
-          <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-900 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading shared todos...</p>
+          <div className="w-8 h-8 border-2 border-gray-600 border-t-[#C8A2D6] rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-300">Loading shared todos...</p>
         </div>
       </div>
     );
   }
 
-  // ✅ Show error state
+  // ✅ Show error state (Dark Theme)
   if (state.error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center">
         <div className="text-center p-8">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <IconX size={32} className="text-red-600" />
+          <div className="w-16 h-16 bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-700">
+            <IconX size={32} className="text-red-400" />
           </div>
-          <h1 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Shared Todos</h1>
-          <p className="text-gray-600 mb-6">{state.error}</p>
+          <h1 className="text-xl font-semibold text-white mb-2">Error Loading Shared Todos</h1>
+          <p className="text-gray-400 mb-6">{state.error}</p>
           <div className="space-x-3">
             <button
               onClick={() => router.push('/')}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              className="px-4 py-2 bg-gray-800 text-gray-300 rounded-md hover:bg-gray-700 transition-colors border border-gray-700"
             >
               Go Home
             </button>
             <button
               onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+              className="px-4 py-2 bg-[#C8A2D6] text-white rounded-md hover:bg-[#B591C8] transition-colors"
             >
               Retry
             </button>
@@ -438,79 +530,84 @@ export default function SharedTodoPage() {
     );
   }
 
-  // ✅ Show login required state for unauthenticated users
+  // ✅ Show login required state for unauthenticated users (Dark Theme)
   if (!user && state.invitation) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200">
-          <div className="max-w-4xl mx-auto px-6 py-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <IconUsers size={32} className="text-blue-600" />
-              </div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">You've been invited to collaborate!</h1>
-              <p className="text-gray-600 mb-6">
-                {state.invitation.title && (
-                  <>Join "<strong>{state.invitation.title}</strong>" to start collaborating on todos</>
-                )}
-              </p>
-            </div>
+      <div className="min-h-screen bg-[#0F0F0F]">
+        {/* Header matching dark style with bigger logo */}
+        <div className="sticky top-0 z-30 bg-[#1A1A1A] px-8 py-6 border-b border-gray-800">
+          <div className="flex flex-col items-center space-y-4">
+            {/* Big Logo */}
+            <Image 
+              src="/images/Logo.svg" 
+              alt="Logo" 
+              width={200} 
+              height={200}
+              priority
+              style={{height: "auto"}}
+              className="drop-shadow-lg" 
+            />
+            {/* Title */}
+            <h1 className="text-2xl font-bold text-white">Join Collaboration</h1>
+          </div>
+        </div>
 
-            {/* Invitation Preview */}
-            <div className="max-w-md mx-auto bg-gray-50 rounded-lg p-6 mb-8">
-              <div className="text-center mb-4">
-                <h3 className="font-semibold text-gray-900 mb-1">{state.invitation.title}</h3>
-                {state.invitation.description && (
-                  <p className="text-sm text-gray-600">{state.invitation.description}</p>
-                )}
+        {/* Content */}
+        <div className="p-6">
+          <div className="max-w-2xl mx-auto">
+            {/* Invitation Preview Card */}
+            <div className="bg-[#1A1A1A] rounded-lg shadow-xl p-6 mb-6 border border-gray-800">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-[#C8A2D6] rounded-lg flex items-center justify-center mx-auto mb-4 shadow-lg">
+                  <IconUsers size={32} className="text-white" />
+                </div>
+                <h2 className="text-xl font-bold text-white mb-2">You've been invited to collaborate!</h2>
+                <p className="text-gray-400">
+                  {state.invitation.title && (
+                    <>Join "<strong className="text-[#C8A2D6]">{state.invitation.title}</strong>" to start collaborating on todos</>
+                  )}
+                </p>
               </div>
-              
-              <div className="flex items-center justify-center space-x-6 text-sm text-gray-500">
-                <div className="flex items-center space-x-1">
-                  <IconCalendar size={14} />
+
+              {/* Stats */}
+              <div className="flex items-center justify-center space-x-6 text-sm text-gray-400 mb-6">
+                <div className="flex items-center space-x-2">
+                  <IconCalendar size={16} className="text-[#C8A2D6]" />
                   <span>{state.invitation.todoIds.length} todos</span>
                 </div>
-                <div className="flex items-center space-x-1">
-                  <IconUsers size={14} />
+                <div className="flex items-center space-x-2">
+                  <IconUsers size={16} className="text-[#C8A2D6]" />
                   <span>{state.invitation.acceptedUsers.length} members</span>
                 </div>
                 {state.invitation.expiresAt && (
-                  <div className="flex items-center space-x-1">
-                    <IconClock size={14} />
+                  <div className="flex items-center space-x-2">
+                    <IconClock size={16} className="text-[#C8A2D6]" />
                     <span>Expires {state.invitation.expiresAt.toLocaleDateString()}</span>
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* Sign In Section */}
-            <div className="max-w-sm mx-auto">
-              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Sign in to join</h3>
-                <p className="text-sm text-gray-600 mb-6">
-                  You need to sign in to accept this invitation and start collaborating.
-                </p>
-                
+              {/* Sign In Button */}
+              <div className="text-center">
                 <button
                   onClick={handleSignIn}
                   disabled={isSigningIn}
-                  className={`w-full flex items-center justify-center space-x-2 px-4 py-3 border border-gray-300 rounded-lg text-sm font-medium transition-colors ${
+                  className={`px-6 py-3 text-white text-sm font-medium rounded-md transition-colors shadow-lg ${
                     isSigningIn
-                      ? 'bg-gray-50 text-gray-400 cursor-not-allowed'
-                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                      ? 'bg-gray-700 cursor-not-allowed'
+                      : 'bg-[#C8A2D6] hover:bg-[#B591C8]'
                   }`}
                 >
                   {isSigningIn ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       <span>Signing in...</span>
-                    </>
+                    </div>
                   ) : (
-                    <>
+                    <div className="flex items-center space-x-2">
                       <IconLogin size={16} />
                       <span>Sign in with Google</span>
-                    </>
+                    </div>
                   )}
                 </button>
                 
@@ -519,6 +616,35 @@ export default function SharedTodoPage() {
                 </p>
               </div>
             </div>
+
+            {/* Collaborators if any */}
+            {state.invitation.acceptedUsers && state.invitation.acceptedUsers.length > 0 && (
+              <div className="bg-[#1A1A1A] rounded-lg shadow-xl p-6 border border-gray-800">
+                <h3 className="text-lg font-semibold text-white mb-4">Current Team Members</h3>
+                <div className="flex -space-x-2">
+                  {state.invitation.acceptedUsers.slice(0, 5).map((collaborator) => (
+                    <div key={collaborator.userId} className="relative group">
+                      <img
+                        src={collaborator.photoURL}
+                        alt={collaborator.displayName}
+                        className="w-10 h-10 rounded-full border-2 border-[#C8A2D6] shadow-sm"
+                      />
+                      {/* Tooltip */}
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                        {collaborator.displayName} ({collaborator.role})
+                      </div>
+                    </div>
+                  ))}
+                  {state.invitation.acceptedUsers.length > 5 && (
+                    <div className="w-10 h-10 rounded-full bg-gray-700 border-2 border-[#C8A2D6] shadow-sm flex items-center justify-center">
+                      <span className="text-xs font-medium text-gray-300">
+                        +{state.invitation.acceptedUsers.length - 5}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -528,153 +654,70 @@ export default function SharedTodoPage() {
   const { invitation, todos, userRole } = state;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-6xl mx-auto px-6 py-4">
+    <div className="min-h-screen bg-[#0F0F0F]">
+      {/* Header with dark theme */}
+      <HeaderBar 
+        invitation={invitation}
+        userRole={userRole}
+        onAcceptInvitation={handleAcceptInvitation}
+        onSignIn={handleSignIn}
+        isJoining={isJoining}
+        isSigningIn={isSigningIn}
+        user={user}
+      />
+
+      {/* Main Content */}
+      <div className="p-6">
+        {/* Collaboration Stats Bar */}
+        <div className="bg-[#1A1A1A] rounded-lg shadow-xl p-4 mb-6 border border-gray-800">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => router.back()}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <IconArrowLeft size={20} className="text-gray-600" />
-              </button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">{invitation?.title}</h1>
-                <p className="text-sm text-gray-600 mt-1">{invitation?.description}</p>
+            <div className="flex items-center space-x-6">
+              <div className="flex items-center space-x-2 text-sm text-gray-300">
+                <IconCalendar size={16} className="text-[#C8A2D6]" />
+                <span className="font-medium">{todos.length} todos</span>
               </div>
-            </div>
-            
-            {/* Action Buttons */}
-            <div className="flex items-center space-x-3">
-              {/* Status Badge */}
-              <div className={`px-3 py-1 rounded-full text-xs font-medium flex items-center space-x-1 ${
-                userRole === 'editor' 
-                  ? 'bg-green-100 text-green-700' 
-                  : userRole === 'viewer' 
-                  ? 'bg-blue-100 text-blue-700' 
-                  : 'bg-gray-100 text-gray-700'
-              }`}>
-                {userRole === 'editor' ? (
-                  <>
-                    <IconEdit size={12} />
-                    <span>Editor</span>
-                  </>
-                ) : userRole === 'viewer' ? (
-                  <>
-                    <IconEye size={12} />
-                    <span>Viewer</span>
-                  </>
-                ) : (
-                  <>
-                    <IconUsers size={12} />
-                    <span>Public View</span>
-                  </>
-                )}
+              <div className="flex items-center space-x-2 text-sm text-gray-300">
+                <IconUsers size={16} className="text-[#C8A2D6]" />
+                <span className="font-medium">{invitation?.acceptedUsers.length || 0} collaborators</span>
               </div>
-
-              {/* Share Link Button */}
-              <button
-                onClick={handleShareLink}
-                className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
-                title="Copy share link"
-              >
-                <IconShare size={16} className="text-gray-600" />
-              </button>
-
-              {/* Join Collaboration Button */}
-              {userRole === 'none' && user && (
-                <button
-                  onClick={handleAcceptInvitation}
-                  disabled={isJoining}
-                  className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors flex items-center space-x-2 ${
-                    isJoining 
-                      ? 'bg-blue-400 cursor-not-allowed' 
-                      : 'bg-blue-600 hover:bg-blue-700'
-                  }`}
-                >
-                  {isJoining ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Joining...</span>
-                    </>
-                  ) : (
-                    <>
-                      <IconExternalLink size={14} />
-                      <span>Join Collaboration</span>
-                    </>
-                  )}
-                </button>
-              )}
-
-              {/* Success state for joined users */}
-              {userRole === 'editor' && isJoining && (
-                <div className="px-4 py-2 bg-green-100 text-green-700 text-sm font-medium rounded-lg flex items-center space-x-2">
-                  <IconCheck size={14} />
-                  <span>Joined! Redirecting...</span>
+              <div className="flex items-center space-x-2 text-sm text-gray-300">
+                <IconCheck size={16} className="text-[#C8A2D6]" />
+                <span className="font-medium">{todos.filter(t => t.completed).length} completed</span>
+              </div>
+              {invitation?.expiresAt && (
+                <div className="flex items-center space-x-2 text-sm text-gray-400">
+                  <IconClock size={16} className="text-[#C8A2D6]" />
+                  <span>Expires {invitation.expiresAt.toLocaleDateString()}</span>
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Rest of your collaboration info and content remains the same */}
-          {/* Collaboration Info */}
-          <div className="flex items-center space-x-6 mt-4 pt-4 border-t border-gray-100">
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <IconCalendar size={16} />
-              <span>{todos.length} todos</span>
-            </div>
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <IconUsers size={16} />
-              <span>{invitation?.acceptedUsers.length || 0} collaborators</span>
-            </div>
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <IconCheck size={16} />
-              <span>{todos.filter(t => t.completed).length} completed</span>
-            </div>
-            {invitation?.expiresAt && (
-              <div className="flex items-center space-x-2 text-sm text-gray-500">
-                <IconClock size={16} />
-                <span>Expires {invitation.expiresAt.toLocaleDateString()}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Collaborators Avatars */}
-          {invitation?.acceptedUsers && invitation.acceptedUsers.length > 0 && (
-            <div className="flex items-center space-x-3 mt-4">
-              <span className="text-sm font-medium text-gray-700">Team:</span>
+            {/* Team Avatars */}
+            {invitation?.acceptedUsers && invitation.acceptedUsers.length > 0 && (
               <div className="flex -space-x-2">
-                {invitation.acceptedUsers.slice(0, 5).map((collaborator) => (
+                {invitation.acceptedUsers.slice(0, 4).map((collaborator) => (
                   <div key={collaborator.userId} className="relative group">
                     <img
                       src={collaborator.photoURL}
                       alt={collaborator.displayName}
-                      className="w-8 h-8 rounded-full border-2 border-white shadow-sm hover:scale-110 transition-transform"
+                      className="w-8 h-8 rounded-full border-2 border-[#C8A2D6] shadow-sm"
                     />
-                    {/* Tooltip */}
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                      {collaborator.displayName} ({collaborator.role})
-                    </div>
                   </div>
                 ))}
-                {invitation.acceptedUsers.length > 5 && (
-                  <div className="w-8 h-8 rounded-full bg-gray-200 border-2 border-white shadow-sm flex items-center justify-center">
-                    <span className="text-xs font-medium text-gray-600">
-                      +{invitation.acceptedUsers.length - 5}
+                {invitation.acceptedUsers.length > 4 && (
+                  <div className="w-8 h-8 rounded-full bg-gray-700 border-2 border-[#C8A2D6] shadow-sm flex items-center justify-center">
+                    <span className="text-xs font-medium text-gray-300">
+                      +{invitation.acceptedUsers.length - 4}
                     </span>
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Filter Tabs */}
-      <div className="max-w-6xl mx-auto px-6 py-4">
-        <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
+        {/* ✅ UPDATED Filter Tabs with Dark Theme and #C8A2D6 styling */}
+        <div className="bg-[#1A1A1A] p-1 rounded-lg w-fit mb-6 border border-gray-800">
           {[
             { key: 'all', label: 'All', count: state.todos.length },
             { key: 'week', label: 'This Week', count: state.todos.filter(t => t.startTime ? isThisWeek(t.startTime) : isThisWeek(t.createdAt)).length },
@@ -684,27 +727,25 @@ export default function SharedTodoPage() {
             <button
               key={tab.key}
               onClick={() => setFilter(tab.key as any)}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
                 filter === tab.key
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-[#C8A2D6] text-white shadow-lg border-2 border-[#C8A2D6]'
+                  : 'text-gray-400 hover:text-white border-2 border-transparent hover:border-[#C8A2D6]/30 hover:bg-[#C8A2D6]/10'
               }`}
             >
               {tab.label} ({tab.key === filter ? filteredTodos.length : tab.count})
             </button>
           ))}
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="max-w-6xl mx-auto px-6 pb-12">
+        {/* Content */}
         {filteredTodos.length === 0 ? (
           <div className="text-center py-12">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <IconCalendar size={32} className="text-gray-400" />
+            <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-700">
+              <IconCalendar size={32} className="text-gray-500" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No todos found</h3>
-            <p className="text-gray-600">
+            <h3 className="text-lg font-semibold text-white mb-2">No todos found</h3>
+            <p className="text-gray-400">
               {filter === 'all' 
                 ? "No todos have been shared yet." 
                 : `No todos match the ${filter} filter.`}
@@ -715,8 +756,8 @@ export default function SharedTodoPage() {
             {/* Today's Todos */}
             {todayTodos.length > 0 && (
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                <h2 className="text-lg font-semibold text-white mb-4 flex items-center">
+                  <div className="w-2 h-2 bg-[#C8A2D6] rounded-full mr-3"></div>
                   Today ({todayTodos.length})
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -749,7 +790,7 @@ export default function SharedTodoPage() {
                           className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
                             todo.completed
                               ? 'bg-green-500 border-green-500 text-white'
-                              : 'border-gray-300 hover:border-green-400 bg-white'
+                              : 'border-gray-600 hover:border-[#C8A2D6] bg-[#1A1A1A] text-gray-400 hover:text-[#C8A2D6]'
                           }`}
                         >
                           {todo.completed && <IconCheck size={12} />}
@@ -764,8 +805,8 @@ export default function SharedTodoPage() {
             {/* Upcoming Todos */}
             {upcomingTodos.length > 0 && (
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                <h2 className="text-lg font-semibold text-white mb-4 flex items-center">
+                  <div className="w-2 h-2 bg-green-400 rounded-full mr-3"></div>
                   Upcoming ({upcomingTodos.length})
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -798,7 +839,7 @@ export default function SharedTodoPage() {
                           className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
                             todo.completed
                               ? 'bg-green-500 border-green-500 text-white'
-                              : 'border-gray-300 hover:border-green-400 bg-white'
+                              : 'border-gray-600 hover:border-[#C8A2D6] bg-[#1A1A1A] text-gray-400 hover:text-[#C8A2D6]'
                           }`}
                         >
                           {todo.completed && <IconCheck size={12} />}
@@ -813,8 +854,8 @@ export default function SharedTodoPage() {
             {/* Past Todos */}
             {pastTodos.length > 0 && (
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                <h2 className="text-lg font-semibold text-white mb-4 flex items-center">
+                  <div className="w-2 h-2 bg-orange-400 rounded-full mr-3"></div>
                   Past ({pastTodos.length})
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -847,7 +888,7 @@ export default function SharedTodoPage() {
                           className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
                             todo.completed
                               ? 'bg-green-500 border-green-500 text-white'
-                              : 'border-gray-300 hover:border-green-400 bg-white'
+                              : 'border-gray-600 hover:border-[#C8A2D6] bg-[#1A1A1A] text-gray-400 hover:text-[#C8A2D6]'
                           }`}
                         >
                           {todo.completed && <IconCheck size={12} />}
@@ -862,50 +903,50 @@ export default function SharedTodoPage() {
         )}
       </div>
 
-      {/* Todo Details Modal */}
+      {/* Todo Details Modal (Dark Theme) */}
       <AnimatePresence>
         {isDetailsModalOpen && selectedTodo && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"
             onClick={() => setIsDetailsModalOpen(false)}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
+              className="bg-[#1A1A1A] rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden border border-gray-800"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-900">{selectedTodo.title}</h2>
+                  <h2 className="text-xl font-bold text-white">{selectedTodo.title}</h2>
                   <button
                     onClick={() => setIsDetailsModalOpen(false)}
-                    className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                    className="p-2 rounded hover:bg-gray-800 transition-colors"
                   >
                     <IconX size={20} className="text-gray-400" />
                   </button>
                 </div>
 
                 {selectedTodo.description && (
-                  <p className="text-gray-700 mb-4">{selectedTodo.description}</p>
+                  <p className="text-gray-300 mb-4">{selectedTodo.description}</p>
                 )}
 
                 <div className="space-y-3">
                   {selectedTodo.category && (
                     <div className="flex items-center space-x-2 text-sm">
-                      <IconTag size={16} className="text-gray-400" />
-                      <span className="text-gray-600">{selectedTodo.category}</span>
+                      <IconTag size={16} className="text-[#C8A2D6]" />
+                      <span className="text-gray-400">{selectedTodo.category}</span>
                     </div>
                   )}
 
                   {selectedTodo.startTime && (
                     <div className="flex items-center space-x-2 text-sm">
-                      <IconClock size={16} className="text-gray-400" />
-                      <span className="text-gray-600">
+                      <IconClock size={16} className="text-[#C8A2D6]" />
+                      <span className="text-gray-400">
                         {selectedTodo.startTime.toLocaleDateString('en-US', { 
                           weekday: 'short', 
                           month: 'short', 
@@ -918,9 +959,9 @@ export default function SharedTodoPage() {
                   )}
 
                   <div className="flex items-center space-x-2 text-sm">
-                    <IconCheck size={16} className="text-gray-400" />
+                    <IconCheck size={16} className="text-[#C8A2D6]" />
                     <span className={`font-medium ${
-                      selectedTodo.completed ? 'text-green-600' : 'text-orange-600'
+                      selectedTodo.completed ? 'text-green-400' : 'text-orange-400'
                     }`}>
                       {selectedTodo.completed ? 'Completed' : 'Pending'}
                     </span>
@@ -932,22 +973,22 @@ export default function SharedTodoPage() {
                         selectedTodo.priority === 'high' ? 'bg-red-400' :
                         selectedTodo.priority === 'medium' ? 'bg-yellow-400' : 'bg-green-400'
                       }`}></div>
-                      <span className="text-gray-600 capitalize">{selectedTodo.priority} priority</span>
+                      <span className="text-gray-400 capitalize">{selectedTodo.priority} priority</span>
                     </div>
                   )}
                 </div>
 
                 {userRole === 'editor' && (
-                  <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-200">
+                  <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-800">
                     <button
                       onClick={() => {
                         handleTodoToggle(selectedTodo);
                         setIsDetailsModalOpen(false);
                       }}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                         selectedTodo.completed
-                          ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
-                          : 'bg-green-100 text-green-700 hover:bg-green-200'
+                          ? 'bg-orange-900/30 text-orange-400 hover:bg-orange-900/50 border border-orange-700'
+                          : 'bg-green-900/30 text-green-400 hover:bg-green-900/50 border border-green-700'
                       }`}
                     >
                       Mark as {selectedTodo.completed ? 'Pending' : 'Complete'}
@@ -956,18 +997,18 @@ export default function SharedTodoPage() {
                 )}
 
                 {userRole === 'none' && (
-                  <div className="mt-6 pt-4 border-t border-gray-200">
-                    <p className="text-sm text-gray-500 text-center mb-4">
+                  <div className="mt-6 pt-4 border-t border-gray-800">
+                    <p className="text-sm text-gray-400 text-center mb-4">
                       Join this collaboration to interact with todos
                     </p>
                     <div className="flex justify-center">
                       <button
                         onClick={handleAcceptInvitation}
                         disabled={isJoining}
-                        className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors ${
+                        className={`px-4 py-2 text-white text-sm font-medium rounded-md transition-colors ${
                           isJoining 
-                            ? 'bg-blue-400 cursor-not-allowed' 
-                            : 'bg-blue-600 hover:bg-blue-700'
+                            ? 'bg-gray-700 cursor-not-allowed' 
+                            : 'bg-[#C8A2D6] hover:bg-[#B591C8] shadow-lg'
                         }`}
                       >
                         {isJoining ? 'Joining...' : 'Join Collaboration'}
