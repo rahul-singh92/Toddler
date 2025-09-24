@@ -25,7 +25,7 @@ interface ShareableItem {
   isShared?: boolean; // To show if it's already a shared todo
 }
 
-export default function ShareLinkModal({
+export default function ShareLinkModal({ 
   isOpen, 
   onClose, 
   todos, 
