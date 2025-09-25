@@ -6,3 +6,48 @@
     0px 1px 0px 0px rgba(25, 28, 33, 0.02),
     0px 0px 0px 1px rgba(25, 28, 33, 0.08);
 }
+
+/* Default padding for all */
+.auth-page {
+  padding-top: 140px;
+}
+
+.logo-img {
+  width: 200px !important;
+  height: auto !important;
+}
+
+/* 📱 Small phones (portrait, < 400px wide) */
+@media (max-width: 400px) {
+  .auth-page {
+    padding-top: 160px; /* push form lower */
+  }
+}
+
+/* 📱 Large phones (~iPhone 12, Pixel 6 etc) */
+@media (min-width: 401px) and (max-width: 600px) {
+  .auth-page {
+    padding-top: 150px;
+  }
+}
+
+/* 📟 Nest Hub (1024 × 600) */
+@media (width: 1024px) and (height: 600px) {
+  .auth-page {
+    padding-top: 200px; /* extra spacing */
+  }
+}
+
+/* 💻 Tablets (600px–900px height) */
+@media (min-width: 601px) and (max-width: 1200px) and (max-height: 900px) {
+  .auth-page {
+    padding-top: 170px;
+  }
+}
+
+/* 🖥️ Desktops / laptops */
+@media (min-width: 1025px) and (min-height: 700px) {
+  .auth-page {
+    padding-top: 0; /* no extra spacing */
+  }
+}

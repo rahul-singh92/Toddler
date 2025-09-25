@@ -30,8 +30,14 @@ export default function AuthForm() {
     const email = (document.getElementById("email") as HTMLInputElement).value;
     const password = (document.getElementById("password") as HTMLInputElement).value;
 
-    const fName = mode === "signup" ? (document.getElementById("firstname") as HTMLInputElement).value : "";
-    const lName = mode === "signup" ? (document.getElementById("lastname") as HTMLInputElement).value : "";
+    const fName =
+      mode === "signup"
+        ? (document.getElementById("firstname") as HTMLInputElement).value
+        : "";
+    const lName =
+      mode === "signup"
+        ? (document.getElementById("lastname") as HTMLInputElement).value
+        : "";
 
     try {
       if (mode === "signup") {
@@ -55,8 +61,7 @@ export default function AuthForm() {
         router.push("/todo");
       }
     } catch (error: unknown) {
-      // Then handle error safely
-      if (error && typeof error === 'object' && 'code' in error) {
+      if (error && typeof error === "object" && "code" in error) {
         const firebaseError = error as { code: string };
         if (firebaseError.code === "auth/user-not-found") {
           setErrorMsg("No account found. Please sign up first.");
@@ -86,22 +91,17 @@ export default function AuthForm() {
       const userSnap = await getDoc(userRef);
 
       if (!userSnap.exists()) {
-        // Handle cases where displayName might be empty, null, or contain only one name
         let firstName = "User";
         let lastName = "";
 
         if (user.displayName && user.displayName.trim()) {
           const nameParts = user.displayName.trim().split(" ");
           firstName = nameParts[0] || "User";
-
-          // If there are multiple parts, join everything except the first as last name
-          // If there's only one part, lastName remains empty
           if (nameParts.length > 1) {
             lastName = nameParts.slice(1).join(" ");
           }
         }
 
-        // Generate avatar URL with proper handling of empty last name
         const avatarSeed = lastName ? `${firstName}+${lastName}` : firstName;
         const avatarUrl =
           user.photoURL ||
@@ -127,11 +127,20 @@ export default function AuthForm() {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-800 p-6">
-      <div className="absolute top-4 left-4">
-        <Image src="/images/Logo.svg" alt="Toddler Logo" width={200} height={200} />
+    <div className="auth-page min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-800 relative overflow-y-auto">
+      {/* Logo */}
+      <div className="logo absolute top-4 left-1/2 -translate-x-1/2 md:translate-x-0 md:left-4">
+        <Image
+          src="/images/Logo.svg"
+          alt="Toddler Logo"
+          width={200}
+          height={200}
+          className="logo-img"
+        />
       </div>
-      <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-2xl shadow-lg p-10 relative">
+
+      {/* Form container */}
+      <div className="form-box w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-2xl shadow-lg p-10 relative">
         <h2 className="text-3xl font-bold text-neutral-800 dark:text-neutral-200 text-center">
           {mode === "signup" ? "Create your account" : "Welcome back"}
         </h2>
@@ -160,7 +169,12 @@ export default function AuthForm() {
 
             <LabelInputContainer>
               <Label htmlFor="email">Email Address</Label>
-              <Input id="email" placeholder="rahul-singh@gmail.com" type="email" required />
+              <Input
+                id="email"
+                placeholder="rahul-singh@gmail.com"
+                type="email"
+                required
+              />
             </LabelInputContainer>
 
             <LabelInputContainer>
@@ -168,7 +182,9 @@ export default function AuthForm() {
               <div className="relative w-full">
                 <Input
                   id="password"
-                  placeholder={showPassword ? "I Can see your password" : "••••••••"}
+                  placeholder={
+                    showPassword ? "I Can see your password" : "••••••••"
+                  }
                   type={showPassword ? "text" : "password"}
                   className="pr-10"
                   required
@@ -198,7 +214,11 @@ export default function AuthForm() {
             <div className="my-6 h-[1px] w-full bg-gradient-to-r from-transparent via-neutral-300 to-transparent dark:via-neutral-700" />
 
             <div className="flex justify-center">
-              <OAuthButton icon={<IconBrandGoogle />} label="Continue with Google" onClick={handleGoogleLogin} />
+              <OAuthButton
+                icon={<IconBrandGoogle />}
+                label="Continue with Google"
+                onClick={handleGoogleLogin}
+              />
             </div>
           </form>
         )}
@@ -207,14 +227,26 @@ export default function AuthForm() {
           {mode === "signup" ? (
             <>
               Already have an account?{" "}
-              <button onClick={() => { setMode("signin"); setErrorMsg(""); }} className="text-indigo-600 dark:text-indigo-400 hover:underline">
+              <button
+                onClick={() => {
+                  setMode("signin");
+                  setErrorMsg("");
+                }}
+                className="text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
                 Sign in
               </button>
             </>
           ) : (
             <>
               Don&apos;t have an account?{" "}
-              <button onClick={() => { setMode("signup"); setErrorMsg(""); }} className="text-indigo-600 dark:text-indigo-400 hover:underline">
+              <button
+                onClick={() => {
+                  setMode("signup");
+                  setErrorMsg("");
+                }}
+                className="text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
                 Sign up
               </button>
             </>
@@ -225,7 +257,15 @@ export default function AuthForm() {
   );
 }
 
-const OAuthButton = ({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick?: () => void }) => (
+const OAuthButton = ({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick?: () => void;
+}) => (
   <button
     onClick={onClick}
     className="group/btn flex h-10 items-center justify-center space-x-2 rounded-md bg-gray-50 px-4 font-medium text-black shadow-sm dark:bg-zinc-800 dark:text-white"
@@ -243,6 +283,12 @@ const BottomGradient = () => (
   </>
 );
 
-const LabelInputContainer = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+const LabelInputContainer = ({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) => (
   <div className={cn("flex w-full flex-col space-y-2", className)}>{children}</div>
 );
