@@ -39,7 +39,7 @@ export function groupOverlappingTodos(todos: Todo[]): Todo[][] {
   return groups;
 }
 
-// ✅ NEW: Helper function to group all-day todos for stacking
+// Helper function to group all-day todos for stacking
 export function groupAllDayTodos(todos: Todo[]): Todo[][] {
   if (todos.length === 0) return [];
   if (todos.length === 1) return [todos];
@@ -48,7 +48,7 @@ export function groupAllDayTodos(todos: Todo[]): Todo[][] {
   return [todos];
 }
 
-// ✅ NEW: Helper function to determine if a todo is all-day
+// Helper function to determine if a todo is all-day
 export function isAllDayTodo(todo: Todo): boolean {
   // A todo is considered all-day if it has no startTime
   return !todo.startTime;
@@ -74,12 +74,15 @@ export function generateRecurringDates(todo: Todo, viewStartDate: Date, viewEndD
     endDate = new Date(Math.min(endDate.getTime(), recurrenceEndDate.getTime()));
   }
 
-  let currentDate = new Date(startDate);
+  const currentDate = new Date(startDate);
+  let iterationCount = 0; // ✅ Better infinite loop protection
 
-  while (currentDate <= endDate && dates.length < 100) {
+  while (currentDate <= endDate && dates.length < 100 && iterationCount < 1000) {
     if (currentDate >= viewStartDate && currentDate <= viewEndDate) {
       dates.push(new Date(currentDate));
     }
+
+    const previousTime = currentDate.getTime(); // ✅ Store previous time
 
     switch (todo.recurrence.type) {
       case 'daily':
@@ -98,7 +101,11 @@ export function generateRecurringDates(todo: Todo, viewStartDate: Date, viewEndD
         break;
     }
 
-    if (currentDate.getTime() === startDate.getTime()) {
+    iterationCount++; // ✅ Increment counter
+
+    // ✅ Better infinite loop protection - check if date actually advanced
+    if (currentDate.getTime() <= previousTime) {
+      console.warn('Date did not advance in recurrence generation, breaking to avoid infinite loop');
       break;
     }
   }

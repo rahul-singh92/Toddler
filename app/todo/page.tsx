@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { useState, useEffect, useRef, useLayoutEffect, useCallback } from "react";
 import ProtectedRoute from "../components/ProtectedRoute";
 import LeftSidebar from "../components/LeftSidebar";
 import TodoModal from "../components/TodoModal";
@@ -18,8 +18,6 @@ import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "../lib/firebase";
 import {
   getWeekNumber,
-  getCurrentWeekDates,
-  isThisWeek,
   isSameDay,
   isThisMonth
 } from "../utils/dateHelpers";
@@ -172,7 +170,7 @@ export default function TodoPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
 
-  // ✅ ADD CALENDAR CONTEXT MENU STATE
+  // Calendar context menu state
   const [calendarContextMenu, setCalendarContextMenu] = useState<{
     isVisible: boolean;
     position: { x: number; y: number };
@@ -198,8 +196,46 @@ export default function TodoPage() {
     setCurrentWeekDates(weekDates);
   }, [currentWeekStartDate]);
 
+  // ✅ DEBUG FUNCTION
+  const debugRecurrence = useCallback(() => {
+    const weekStart = new Date(currentWeekStartDate);
+    weekStart.setHours(0, 0, 0, 0);
+    
+    const weekEnd = new Date(currentWeekStartDate);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+    
+    console.log('🔍 Debug Info:');
+    console.log('📅 Current week start:', currentWeekStartDate.toDateString());
+    console.log('📅 Week range:', weekStart.toDateString(), 'to', weekEnd.toDateString());
+    console.log('📅 Current week dates:', currentWeekDates.map(d => ({
+      day: d.toLocaleDateString('en-US', { weekday: 'short' }),
+      date: d.toDateString(),
+      dayOfWeek: d.getDay()
+    })));
+    
+    const recurringTodos = todos.filter(todo => todo.recurrence?.type !== 'none' && todo.startTime);
+    console.log(`🔁 Found ${recurringTodos.length} recurring todos`);
+    
+    recurringTodos.forEach(todo => {
+      const dates = generateRecurringDates(todo, weekStart, weekEnd);
+      console.log(`📅 Todo "${todo.title}" (${todo.recurrence?.type}) generated ${dates.length} dates:`, 
+        dates.map(d => ({
+          day: d.toLocaleDateString('en-US', { weekday: 'short' }),
+          date: d.toDateString()
+        })));
+    });
+  }, [currentWeekStartDate, currentWeekDates, todos]);
+
+  // ✅ DEBUG: Call debug function when todos or week changes
+  useEffect(() => {
+    if (todos.length > 0) {
+      debugRecurrence();
+    }
+  }, [todos, currentWeekDates, debugRecurrence]);
+
   // Function to center today's column with proper dimension checks
-  const centerTodayColumn = () => {
+  const centerTodayColumn = useCallback(() => {
     const today = new Date();
     const todayIndex = currentWeekDates.findIndex(date => isSameDay(date, today));
 
@@ -242,7 +278,7 @@ export default function TodoPage() {
         behavior: isInitialLoad ? 'auto' : 'smooth'
       });
     });
-  };
+  }, [currentWeekDates, isInitialLoad]);
 
   // Use useLayoutEffect for initial centering to avoid flash
   useLayoutEffect(() => {
@@ -256,14 +292,14 @@ export default function TodoPage() {
         }, delay);
       });
     }
-  }, [currentWeekDates, isInitialLoad]);
+  }, [centerTodayColumn, isInitialLoad]);
 
   // Regular useEffect for subsequent centering
   useEffect(() => {
     if (!isInitialLoad) {
       centerTodayColumn();
     }
-  }, [currentWeekDates]);
+  }, [centerTodayColumn, currentWeekDates, isInitialLoad]);
 
   // Synchronize scrolling between header and content
   const handleHeaderScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -341,9 +377,9 @@ export default function TodoPage() {
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [currentWeekDates]);
+  }, [centerTodayColumn]);
 
-  // ✅ UPDATED: Fetch todos from Firestore including collaboration fields
+  // Fetch todos from Firestore including collaboration fields
   useEffect(() => {
     if (!user) {
       setTodos([]);
@@ -380,7 +416,7 @@ export default function TodoPage() {
           },
           ownerId: data.ownerId,
 
-          // ✅ ADD COLLABORATION FIELDS
+          // Collaboration fields
           isShared: data.isShared || false,
           originalId: data.originalId,
           originalOwnerId: data.originalOwnerId,
@@ -394,7 +430,7 @@ export default function TodoPage() {
         });
       });
 
-      // ✅ LOG SHARED TODOS FOR DEBUGGING
+      // Log shared todos for debugging
       const sharedTodos = todosList.filter(todo => todo.isShared);
       if (sharedTodos.length > 0) {
         console.log(`📋 Found ${sharedTodos.length} shared todos:`, sharedTodos.map(t => ({ title: t.title, sharedBy: t.sharedBy?.displayName })));
@@ -448,7 +484,7 @@ export default function TodoPage() {
     setSelectedTodo(null);
   };
 
-  // ✅ ADD CALENDAR CONTEXT MENU HANDLERS
+  // Calendar context menu handlers
   const handleCalendarTodoRightClick = (event: React.MouseEvent, todo: Todo) => {
     event.preventDefault();
     event.stopPropagation();
@@ -470,7 +506,7 @@ export default function TodoPage() {
     setCalendarContextMenu({ isVisible: false, position: { x: 0, y: 0 }, todo: null });
   };
 
-  // ✅ HANDLE DELETE FOR CALENDAR TODOS
+  // Handle delete for calendar todos
   const handleCalendarTodoDelete = async (todo: Todo) => {
     if (!user || !todo.id) {
       console.error("❌ User not authenticated or todo.id is missing");
@@ -486,13 +522,14 @@ export default function TodoPage() {
 
       // Close context menu
       handleCloseCalendarContextMenu();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("❌ Error deleting todo:", error);
-      alert(`Failed to delete todo: ${error?.message || 'Unknown error'}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to delete todo: ${errorMessage}`);
     }
   };
 
-  // ✅ UPDATED: Group todos including shared todos with collaboration section
+  // ✅ FIXED: Group todos with proper date boundaries
   const getGroupedTodos = (): TodoGroup[] => {
     if (loading || todos.length === 0) {
       return [];
@@ -502,13 +539,22 @@ export default function TodoPage() {
 
     // Expand recurring todos
     const expandedTodos: Todo[] = [];
-    const viewStartDate = new Date(Math.min(...currentWeekDates.map(d => d.getTime())));
-    const viewEndDate = new Date(Math.max(...currentWeekDates.map(d => d.getTime())));
+    
+    // ✅ Fixed: Use proper week boundaries
+    const viewStartDate = new Date(currentWeekStartDate);
+    viewStartDate.setHours(0, 0, 0, 0);
+    
+    const viewEndDate = new Date(currentWeekStartDate);
+    viewEndDate.setDate(viewEndDate.getDate() + 6);
+    viewEndDate.setHours(23, 59, 59, 999);
+
+    console.log('🏗️ Building grouped todos with range:', viewStartDate.toDateString(), 'to', viewEndDate.toDateString());
 
     todos.forEach(todo => {
       if (todo.recurrence?.type !== 'none' && todo.startTime) {
         // Generate recurring instances
         const recurringDates = generateRecurringDates(todo, viewStartDate, viewEndDate);
+        console.log(`🔁 Todo "${todo.title}" expanded to ${recurringDates.length} instances`);
         recurringDates.forEach(date => {
           expandedTodos.push({
             ...todo,
@@ -525,7 +571,7 @@ export default function TodoPage() {
       }
     });
 
-    // ✅ ADD SHARED TODOS GROUP
+    // Add shared todos group
     const sharedTodos = todos.filter(todo => todo.isShared);
     if (sharedTodos.length > 0) {
       groups.push({
@@ -592,18 +638,31 @@ export default function TodoPage() {
 
   const groups = getGroupedTodos();
 
-  // Get todos for a specific date
+  // ✅ FIXED: Get todos for a specific date with proper boundaries and debugging
   const getTodosForDate = (date: Date): Todo[] => {
     const result: Todo[] = [];
-    const viewStartDate = new Date(Math.min(...currentWeekDates.map(d => d.getTime())));
-    const viewEndDate = new Date(Math.max(...currentWeekDates.map(d => d.getTime())));
-
+    
+    // Create proper date boundaries for the current week view
+    const weekStart = new Date(currentWeekStartDate);
+    weekStart.setHours(0, 0, 0, 0); // Start of Monday
+    
+    const weekEnd = new Date(currentWeekStartDate);
+    weekEnd.setDate(weekEnd.getDate() + 6); // Sunday
+    weekEnd.setHours(23, 59, 59, 999); // End of Sunday
+    
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+    console.log(`🔍 Getting todos for ${dayName} ${date.toDateString()}`);
+    
     todos.forEach(todo => {
       if (todo.recurrence?.type !== 'none' && todo.startTime) {
-        const recurringDates = generateRecurringDates(todo, viewStartDate, viewEndDate);
+        const recurringDates = generateRecurringDates(todo, weekStart, weekEnd);
+        console.log(`🔁 Todo "${todo.title}" generated ${recurringDates.length} dates for ${dayName}:`, 
+          recurringDates.map(d => d.toLocaleDateString('en-US', { weekday: 'short' })));
+        
         const matchingDate = recurringDates.find(recurDate => isSameDay(recurDate, date));
 
         if (matchingDate) {
+          console.log(`✅ Found matching date for "${todo.title}" on ${dayName}`);
           result.push({
             ...todo,
             id: `${todo.id}-${matchingDate.getTime()}`,
@@ -614,6 +673,7 @@ export default function TodoPage() {
           });
         }
       } else {
+        // Non-recurring todos
         if (todo.startTime) {
           if (isSameDay(todo.startTime, date)) {
             result.push(todo);
@@ -626,10 +686,11 @@ export default function TodoPage() {
       }
     });
 
+    console.log(`📋 Total todos for ${dayName}: ${result.length}`);
     return result;
   };
 
-  // ✅ ADD: Get collaboration stats for debugging
+  // Get collaboration stats for debugging
   const collaborationStats = {
     total: todos.length,
     shared: todos.filter(t => t.isShared).length,
@@ -741,7 +802,6 @@ export default function TodoPage() {
                     return (
                       <div key={index} className="relative flex-shrink-0" style={{ minWidth: '180px' }}>
                         {/* All day events */}
-                        {/* All day events - Updated with stacking support */}
                         <div className="min-h-[80px] space-y-2 mb-4">
                           {(() => {
                             // Get all-day todos (todos without startTime)
@@ -780,7 +840,6 @@ export default function TodoPage() {
                             });
                           })()}
                         </div>
-
 
                         {/* Time slot events */}
                         <div className="relative" style={{ minHeight: '1360px' }}>
@@ -858,7 +917,7 @@ export default function TodoPage() {
           todo={selectedTodo}
         />
 
-        {/* ✅ ADD CALENDAR CONTEXT MENU */}
+        {/* Calendar Context Menu */}
         <TodoContextMenu
           isVisible={calendarContextMenu.isVisible}
           position={calendarContextMenu.position}

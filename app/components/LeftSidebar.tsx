@@ -81,14 +81,23 @@ export default function LeftSidebar({ onToggleSidebar }: LeftSidebarProps) {
         </button>
 
         {photoURL ? (
-          <img src={photoURL} alt="User Avatar" width={40} height={40} className="rounded-full" referrerPolicy="no-referrer" />
+          <Image 
+            src={photoURL} 
+            alt="User Avatar" 
+            width={40} 
+            height={40} 
+            className="rounded-full" 
+            referrerPolicy="no-referrer" 
+            unoptimized  
+          />
         ) : (
-          <img
+          <Image
             src="https://api.dicebear.com/6.x/adventurer-neutral/svg?seed=Default"
             alt="Default Avatar"
             width={40}
             height={40}
             className="rounded-full"
+            unoptimized
           />
         )}
       </div>

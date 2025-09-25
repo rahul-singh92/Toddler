@@ -26,7 +26,7 @@ export default function TodoDetailsModal({ isOpen, onClose, todo }: TodoDetailsM
         });
     };
 
-    const formatRecurrenceEndDate = (endDate: any): string => {
+    const formatRecurrenceEndDate = (endDate: string | Date | { toDate(): Date }): string => {
         try {
             let date: Date;
             
@@ -94,9 +94,9 @@ export default function TodoDetailsModal({ isOpen, onClose, todo }: TodoDetailsM
                     endDate = todo.recurrence.endDate;
                 } else if (todo.recurrence.endDate && typeof todo.recurrence.endDate === 'object' && 'toDate' in todo.recurrence.endDate) {
                     // Handle Firestore Timestamp
-                    endDate = (todo.recurrence.endDate as any).toDate();
+                    endDate = (todo.recurrence.endDate as { toDate(): Date }).toDate();
                 } else {
-                    endDate = new Date(todo.recurrence.endDate as any);
+                    endDate = new Date(todo.recurrence.endDate as string | number | Date);
                 }
                 
                 // Validate the date

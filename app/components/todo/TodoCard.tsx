@@ -8,6 +8,7 @@ import { doc, deleteDoc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "../../lib/firebase";
+import Image from "next/image";
 
 interface TodoCardProps {
   todo: Todo;
@@ -42,6 +43,20 @@ export default function TodoCard({
   // Check if todo is shared/collaborative
   const isSharedTodo = todo.isShared || (todo.sharedWith && todo.sharedWith.length > 0) || todo.collaborationType === 'collaborator';
 
+  // ✅ DEBUG: Log shared todo data
+  if (isSharedTodo) {
+    console.log('🔍 Shared todo data for:', todo.title, {
+      isShared: todo.isShared,
+      sharedWith: todo.sharedWith,
+      sharedBy: todo.sharedBy,
+      collaborationType: todo.collaborationType,
+      hasSharedByPhotoURL: !!todo.sharedBy?.photoURL,
+      hasSharedByDisplayName: !!todo.sharedBy?.displayName,
+      sharedByPhotoURL: todo.sharedBy?.photoURL,
+      sharedByDisplayName: todo.sharedBy?.displayName
+    });
+  }
+
   // Handle todo deletion from Firestore
   const handleTodoDelete = async (todoToDelete: Todo) => {
     if (!user || !todoToDelete.id) {
@@ -71,10 +86,12 @@ export default function TodoCard({
         setIsDeleting(false);
       }, 500);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("❌ Error deleting todo:", error);
       setIsDeleting(false);
-      alert(`Failed to delete todo: ${error?.message || 'Unknown error'}`);
+
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to delete todo: ${errorMessage}`);
     }
   };
 
@@ -400,12 +417,19 @@ export default function TodoCard({
                   <IconUsers size={8} className="mr-1" />
                   <span className="text-xs font-semibold">Collaborate</span>
                 </div>
-                {todo.sharedBy && (
-                  <img
+                {todo.sharedBy && todo.sharedBy.photoURL && todo.sharedBy.displayName && (
+                  <Image
                     src={todo.sharedBy.photoURL}
                     alt={todo.sharedBy.displayName}
+                    width={16}
+                    height={16}
                     className="w-4 h-4 rounded-full border border-white shadow-sm"
                     title={`Shared by ${todo.sharedBy.displayName}`}
+                    unoptimized
+                    onError={(e) => {
+                      console.log('❌ Failed to load avatar:', todo.sharedBy?.photoURL);
+                      e.currentTarget.style.display = 'none';
+                    }}
                   />
                 )}
               </div>

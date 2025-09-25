@@ -9,7 +9,7 @@ interface SharedTodoHeaderProps {
   onSignIn: () => void;
   isJoining: boolean;
   isSigningIn: boolean;
-  user: any;
+  user: { uid: string; displayName?: string | null; email?: string | null; photoURL?: string | null } | null | undefined;
   loginError?: string | null;
 }
 

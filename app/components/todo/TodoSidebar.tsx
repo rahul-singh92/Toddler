@@ -108,7 +108,7 @@ export default function TodoSidebar({
     if (Object.keys(initialCollapsed).length > 0) {
       setCollapsed(prev => ({ ...prev, ...initialCollapsed }));
     }
-  }, [groups.length, collapsed]);
+  }, [groups.length]);
 
   const toggleGroup = (groupKey: string) => {
     setCollapsed(prev => ({
@@ -148,7 +148,7 @@ export default function TodoSidebar({
             newSet.delete(originalTodoId);
             return newSet;
           });
-        } catch (error) {
+        } catch {
           // It's okay if the completion record doesn't exist
           console.log("No completion record to delete");
         }
@@ -166,21 +166,23 @@ export default function TodoSidebar({
         setHiddenTodos(prev => new Set([...prev, displayId]));
       }, 1000);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("❌ Error deleting todo:", error);
       setDeletingTodos(prev => {
         const newSet = new Set(prev);
         newSet.delete(displayId);
         return newSet;
       });
-      alert(`Failed to delete todo: ${error?.message || 'Unknown error'}`);
+
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to delete todo: ${errorMessage}`);
     }
   };
 
   // Use the drag-to-delete hook
   const {
     isDragging,
-    draggedItem: draggedTodo,
+    draggedItem: _draggedTodo, //Prefix with underscore to indicate intentionally
     isOverTrash,
     handleDragStart,
     handleDragEnd,
@@ -219,7 +221,7 @@ export default function TodoSidebar({
         // Always work with the original todo document
         const todoRef = doc(db, 'users', user.uid, 'todos', originalTodoId);
 
-        const updateData: any = {
+        const updateData: Record<string, unknown> = {
           completed: true,
           completedAt: new Date(),
           updatedAt: new Date()
@@ -270,7 +272,7 @@ export default function TodoSidebar({
             setHiddenTodos(prev => new Set([...prev, displayId]));
           }, 800);
         }, 1000);
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("❌ Error completing todo:", error);
 
         // Remove from completing set if error
@@ -281,14 +283,15 @@ export default function TodoSidebar({
         });
 
         // Show detailed error message
-        alert(`Failed to complete todo: ${error?.message || 'Unknown error'}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        alert(`Failed to complete todo: ${errorMessage}`);
       }
     } else {
       // Handle uncompleting - restore recurrence if needed
       try {
         const todoRef = doc(db, 'users', user.uid, 'todos', originalTodoId);
 
-        const updateData: any = {
+        const updateData: Record<string, unknown> = {
           completed: false,
           updatedAt: new Date()
         };
@@ -320,12 +323,13 @@ export default function TodoSidebar({
           newSet.delete(displayId);
           return newSet;
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("❌ Error uncompleting todo:", error);
-        alert(`Failed to uncomplete todo: ${error?.message || 'Unknown error'}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        alert(`Failed to uncomplete todo: ${errorMessage}`);
       }
     }
-  };
+  };  
 
   // Handle checkbox click separately from todo click
   const handleCheckboxClick = (todo: Todo, event: React.ChangeEvent<HTMLInputElement>) => {
@@ -574,7 +578,7 @@ export default function TodoSidebar({
                           >
                             <ul className="p-3 space-y-2">
                               <AnimatePresence mode="popLayout">
-                                {filteredTodos.map((todo, i) => {
+                                {filteredTodos.map((todo, _i) => {
                                   if (!todo.id) return null;
 
                                   const isCompleting = completingTodos.has(todo.id);

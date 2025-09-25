@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import { IconUsers, IconCalendar, IconClock, IconLogin } from "@tabler/icons-react";
-import { TodoInvitation, CollaboratorInfo } from "../../types/collaboration";
+import { TodoInvitation} from "../../types/collaboration";
 import TeamMembersList from "./TeamMembersList";
 
 interface LoginPromptProps {
@@ -46,10 +46,10 @@ export default function LoginPrompt({
               <div className="w-16 h-16 bg-[#C8A2D6] rounded-lg flex items-center justify-center mx-auto mb-4 shadow-lg">
                 <IconUsers size={32} className="text-white" />
               </div>
-              <h2 className="text-xl font-bold text-white mb-2">You've been invited to collaborate!</h2>
+              <h2 className="text-xl font-bold text-white mb-2">You&apos;ve been invited to collaborate!</h2>
               <p className="text-gray-400">
                 {invitation.title && (
-                  <>Join "<strong className="text-[#C8A2D6]">{invitation.title}</strong>" to start collaborating on todos</>
+                  <>Join &quot;<strong className="text-[#C8A2D6]">{invitation.title}</strong>&quot; to start collaborating on todos</>
                 )}
               </p>
             </div>
@@ -97,7 +97,7 @@ export default function LoginPrompt({
               </button>
               
               <p className="text-xs text-gray-500 mt-4">
-                After signing in, you'll automatically join this collaboration.
+                After signing in, you&apos;ll automatically join this collaboration.
               </p>
 
               {/* Login Error Message */}

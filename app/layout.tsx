@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next"; // ✅ Add Viewport import
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -12,6 +12,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// ✅ Separate viewport export
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#C8A2D6",
+};
+
+// ✅ Clean metadata export (removed viewport and themeColor)
 export const metadata: Metadata = {
   title: {
     default: "Toddler",
@@ -24,8 +32,6 @@ export const metadata: Metadata = {
     apple: "/images/main-logo.svg",
   },
   keywords: ["todo", "tasks", "productivity", "collaboration", "calendar"],
-  viewport: "width=device-width, initial-scale=1",
-  themeColor: "#C8A2D6",
 };
 
 export default function RootLayout({

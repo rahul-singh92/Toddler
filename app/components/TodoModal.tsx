@@ -40,6 +40,37 @@ const formatDateForPicker = (date?: string | Date): string | undefined => {
   return date.toISOString();
 };
 
+// ✅ MOVE THESE CONSTANTS OUTSIDE THE COMPONENT
+const predefinedCategories = [
+  { value: "personal", label: "Personal" },
+  { value: "work", label: "Work" },
+  { value: "study", label: "Study" },
+  { value: "health", label: "Health" },
+  { value: "hobby", label: "Hobby" },
+  { value: "finance", label: "Finance" },
+  { value: "shopping", label: "Shopping" },
+  { value: "travel", label: "Travel" },
+];
+
+const categoryOptions = [
+  ...predefinedCategories,
+  { value: "custom", label: "+ Create Custom Category" }
+];
+
+const priorityOptions = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+];
+
+const recurrenceOptions = [
+  { value: "none", label: "No Recurrence" },
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+  { value: "yearly", label: "Yearly" },
+];
+
 export default function TodoModal({ isOpen, onClose, onTodoAdded, editingTodo = null }: TodoModalProps) {
   const [user] = useAuthState(auth);
   const [formData, setFormData] = useState<TodoFormData>(initialFormData);
@@ -64,7 +95,7 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded, editingTodo = 
   const isEditMode = editingTodo !== null;
 
   // Helper function for date conversion
-  const convertToDate = (dateValue: any): Date | undefined => {
+  const convertToDate = (dateValue: string | Date | { toDate(): Date } | null | undefined): Date | undefined => {
     if (!dateValue) return undefined;
     
     try {
@@ -83,39 +114,7 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded, editingTodo = 
     return undefined;
   };
 
-  // Predefined categories
-  const predefinedCategories = [
-    { value: "personal", label: "Personal" },
-    { value: "work", label: "Work" },
-    { value: "study", label: "Study" },
-    { value: "health", label: "Health" },
-    { value: "hobby", label: "Hobby" },
-    { value: "finance", label: "Finance" },
-    { value: "shopping", label: "Shopping" },
-    { value: "travel", label: "Travel" },
-  ];
-
-  const categoryOptions = [
-    ...predefinedCategories,
-    { value: "custom", label: "+ Create Custom Category" }
-  ];
-
-  const priorityOptions = [
-    { value: "low", label: "Low" },
-    { value: "medium", label: "Medium" },
-    { value: "high", label: "High" },
-  ];
-
-  // Recurrence options
-  const recurrenceOptions = [
-    { value: "none", label: "No Recurrence" },
-    { value: "daily", label: "Daily" },
-    { value: "weekly", label: "Weekly" },
-    { value: "monthly", label: "Monthly" },
-    { value: "yearly", label: "Yearly" },
-  ];
-
-  // Reset form when modal opens/closes
+  // ✅ FIXED: Reset form when modal opens/closes (removed predefinedCategories dependency)
   useEffect(() => {
     if (isOpen) {
       if (isEditMode && editingTodo) {
@@ -162,7 +161,7 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded, editingTodo = 
       setCurrentLink("");
       setErrors({});
     }
-  }, [isOpen, isEditMode, editingTodo]);
+  }, [isOpen, isEditMode, editingTodo]); // ✅ Removed predefinedCategories dependency
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -291,26 +290,26 @@ export default function TodoModal({ isOpen, onClose, onTodoAdded, editingTodo = 
   };
 
   const formatDateTimeForDisplay = (dateTimeString: string) => {
-  if (!dateTimeString) return "Select date & time";
-  
-  // If it's already in the format "Sep 21, 2025, 9:00 AM", just return it
-  if (dateTimeString.includes('AM') || dateTimeString.includes('PM')) {
-    return dateTimeString;
-  }
-  
-  // Otherwise, try to parse as Date and format to 12-hour
-  const date = new Date(dateTimeString);
-  if (isNaN(date.getTime())) return dateTimeString;
-  
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  });
-};
+    if (!dateTimeString) return "Select date & time";
+    
+    // If it's already in the format "Sep 21, 2025, 9:00 AM", just return it
+    if (dateTimeString.includes('AM') || dateTimeString.includes('PM')) {
+      return dateTimeString;
+    }
+    
+    // Otherwise, try to parse as Date and format to 12-hour
+    const date = new Date(dateTimeString);
+    if (isNaN(date.getTime())) return dateTimeString;
+    
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
 
   const formatRecurrenceEndDateForDisplay = (dateTimeString?: string | Date) => {
     if (!dateTimeString) return "Select end date (optional)";

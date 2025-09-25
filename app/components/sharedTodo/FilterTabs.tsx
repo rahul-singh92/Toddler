@@ -27,7 +27,7 @@ export default function FilterTabs({
       {filterOptions.map((tab) => (
         <button
           key={tab.key}
-          onClick={() => onFilterChange(tab.key as any)}
+          onClick={() => onFilterChange(tab.key as 'all' | 'week' | 'month' | 'completed')}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
             filter === tab.key
               ? 'bg-[#C8A2D6] text-white shadow-lg border-2 border-[#C8A2D6]'

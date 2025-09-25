@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { IconSearch, IconUsers, IconPlus, IconLink, IconMail } from "@tabler/icons-react";
 import { useClickOutside } from "../hooks/useClickOutside";
+import Image from "next/image";
 
 interface ShareDropdownProps {
   isVisible: boolean;
@@ -88,10 +89,13 @@ export default function ShareDropdown({
                       onClick={() => console.log(`Quick share with ${seed}`)}
                       title={`Share with ${seed}`}
                     >
-                      <img
+                      <Image
                         src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9&radius=50`}
                         alt={`${seed}'s avatar`}
+                        width={32}
+                        height={32}
                         className="w-8 h-8 rounded-full border-2 border-white shadow-sm hover:scale-110 transition-transform duration-200 cursor-pointer group-hover:border-blue-200"
+                        unoptimized
                       />
                       {/* Online indicator for demo */}
                       {index < 2 && (

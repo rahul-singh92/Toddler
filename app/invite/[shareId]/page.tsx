@@ -3,14 +3,15 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "../../lib/firebase";
-import { signInWithPopup, GoogleAuthProvider, AuthError } from "firebase/auth";
-import { doc, getDoc, collection, query, where, onSnapshot, updateDoc, writeBatch, arrayUnion, deleteDoc } from "firebase/firestore";
+import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import { doc, getDoc, collection, query, where, onSnapshot, updateDoc, writeBatch, arrayUnion } from "firebase/firestore";
 import { TodoInvitation, CollaboratorInfo } from "../../types/collaboration";
 import { Todo } from "../../types/todo";
 import { IconUsers, IconCalendar, IconClock, IconTag, IconCheck, IconX } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "framer-motion";
 import TodoCard from "../../components/todo/TodoCard";
 import { isSameDay, isThisWeek, isThisMonth } from "../../utils/dateHelpers";
+import Image from "next/image";
 
 // Import shared todo components
 import SharedTodoHeader from "../../components/sharedTodo/SharedTodoHeader";
@@ -51,13 +52,13 @@ export default function SharedTodoPage() {
   const [loginError, setLoginError] = useState<string | null>(null);
 
   // Helper function to clean data for Firestore (remove undefined values)
-  const cleanFirestoreData = (obj: any): any => {
-    const cleaned: any = {};
+  const cleanFirestoreData = (obj: Record<string, unknown>): Record<string, unknown> => {
+  const cleaned: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(obj)) {
       if (value !== undefined) {
         if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
           // Recursively clean nested objects
-          cleaned[key] = cleanFirestoreData(value);
+          cleaned[key] = cleanFirestoreData(value as Record<string, unknown>);
         } else {
           cleaned[key] = value;
         }
@@ -215,21 +216,24 @@ export default function SharedTodoPage() {
         setShouldAutoAcceptAfterAuth(true);
         console.log("✅ Successfully signed in:", result.user.email);
       }
-    } catch (error: any) {
-      console.error("❌ Sign in error:", error);
-      
-      // Handle different types of auth errors
-      let errorMessage = "Failed to sign in. Please try again.";
-      
-      if (error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
+    } catch (error: unknown) {
+    console.error("❌ Sign in error:", error);
+  
+    // Handle different types of auth errors
+    let errorMessage = "Failed to sign in. Please try again.";
+  
+    if (error && typeof error === 'object' && 'code' in error) {
+      const authError = error as { code: string };
+      if (authError.code === 'auth/cancelled-popup-request' || authError.code === 'auth/popup-closed-by-user') {
         errorMessage = "Sign in was cancelled. Please try again if you want to join the collaboration.";
-      } else if (error.code === 'auth/popup-blocked') {
+      } else if (authError.code === 'auth/popup-blocked') {
         errorMessage = "Pop-up was blocked by your browser. Please enable pop-ups and try again.";
-      } else if (error.code === 'auth/network-request-failed') {
+      } else if (authError.code === 'auth/network-request-failed') {
         errorMessage = "Network error. Please check your connection and try again.";
-      } else if (error.code === 'auth/too-many-requests') {
+      } else if (authError.code === 'auth/too-many-requests') {
         errorMessage = "Too many sign-in attempts. Please wait a moment and try again.";
       }
+    }
       
       setLoginError(errorMessage);
     } finally {
@@ -272,10 +276,20 @@ export default function SharedTodoPage() {
     try {
       console.log("🤝 Starting invitation acceptance process...");
 
+      // Get current user's data from Firestore for proper display name
+      const currentUserRef = doc(db, 'users', user.uid);
+      const currentUserSnap = await getDoc(currentUserRef);
+      const currentUserData = currentUserSnap.exists() ? currentUserSnap.data() : null;
+
+      const currentUserDisplayName = currentUserData 
+        ? `${currentUserData.firstName || ''} ${currentUserData.lastName || ''}`.trim() || 
+          user.email!.split('@')[0]
+        : user.displayName || user.email!.split('@')[0];
+
       // Create collaborator info
       const collaboratorInfo: CollaboratorInfo = {
         email: user.email!,
-        displayName: user.displayName || user.email!.split('@')[0],
+        displayName: currentUserDisplayName,
         photoURL: user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email}`,
         userId: user.uid,
         acceptedAt: new Date(),
@@ -287,9 +301,14 @@ export default function SharedTodoPage() {
       const ownerSnap = await getDoc(ownerRef);
       const ownerData = ownerSnap.exists() ? ownerSnap.data() : null;
 
+      const ownerDisplayName = ownerData
+        ? `${ownerData.firstName || ''} ${ownerData.lastName || ''}`.trim() ||
+          ownerData.email?.split('@')[0] || 'Unknown User'
+          : 'Unknown User';
+
       const sharedByInfo = {
         userId: state.invitation.createdBy,
-        displayName: ownerData?.displayName || 'Unknown User',
+        displayName: ownerDisplayName,
         email: ownerData?.email || '',
         photoURL: ownerData?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${state.invitation.createdBy}`
       };
@@ -369,11 +388,12 @@ export default function SharedTodoPage() {
         router.push('/todo');
       }, 1000);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("❌ Error accepting invitation:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setState(prev => ({ 
         ...prev, 
-        error: `Failed to join collaboration: ${error.message || 'Unknown error'}` 
+        error: `Failed to join collaboration: ${errorMessage}` 
       }));
     } finally {
       setIsJoining(false);
@@ -483,7 +503,7 @@ export default function SharedTodoPage() {
               <div className="flex -space-x-2">
                 {invitation.acceptedUsers.slice(0, 4).map((collaborator) => (
                   <div key={collaborator.userId} className="relative group">
-                    <img
+                    <Image
                       src={collaborator.photoURL}
                       alt={collaborator.displayName}
                       className="w-8 h-8 rounded-full border-2 border-[#C8A2D6] shadow-sm"

@@ -69,7 +69,9 @@ export function useDragToDelete<T>({ onDelete, createCustomDragImage }: UseDragT
         z-index: 9999;
       `;
       
-      const itemName = (item as any)?.title || (item as any)?.name || 'Item';
+      const itemName = (item as { title?: string; name?: string})?.title || 
+                       (item as { title?: string; name?: string})?.name || 
+                       'Item';  
       dragImage.textContent = itemName;
       document.body.appendChild(dragImage);
 

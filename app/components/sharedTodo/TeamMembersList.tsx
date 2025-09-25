@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { IconUsers } from "@tabler/icons-react";
 import { CollaboratorInfo } from "../../types/collaboration";
+import Image from "next/image";
 
 interface TeamMembersListProps {
   collaborators: CollaboratorInfo[];
@@ -39,7 +40,7 @@ const ImageWithFallback = ({
   };
 
   return (
-    <img
+    <Image
       src={imageSrc}
       alt={alt}
       className={className}

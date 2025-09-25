@@ -54,14 +54,19 @@ export default function AuthForm() {
         await signInWithEmailAndPassword(auth, email, password);
         router.push("/todo");
       }
-    } catch (error: any) {
-      // Friendly error messages
-      if (error.code === "auth/user-not-found") {
-        setErrorMsg("No account found. Please sign up first.");
-      } else if (error.code === "auth/wrong-password") {
-        setErrorMsg("Incorrect password. Please try again.");
-      } else if (error.code === "auth/email-already-in-use") {
-        setErrorMsg("Email is already in use.");
+    } catch (error: unknown) {
+      // Then handle error safely
+      if (error && typeof error === 'object' && 'code' in error) {
+        const firebaseError = error as { code: string };
+        if (firebaseError.code === "auth/user-not-found") {
+          setErrorMsg("No account found. Please sign up first.");
+        } else if (firebaseError.code === "auth/wrong-password") {
+          setErrorMsg("Incorrect password. Please try again.");
+        } else if (firebaseError.code === "auth/email-already-in-use") {
+          setErrorMsg("Email is already in use.");
+        } else {
+          setErrorMsg("Something went wrong. Please try again.");
+        }
       } else {
         setErrorMsg("Something went wrong. Please try again.");
       }
@@ -88,7 +93,7 @@ export default function AuthForm() {
         if (user.displayName && user.displayName.trim()) {
           const nameParts = user.displayName.trim().split(" ");
           firstName = nameParts[0] || "User";
-          
+
           // If there are multiple parts, join everything except the first as last name
           // If there's only one part, lastName remains empty
           if (nameParts.length > 1) {
@@ -113,7 +118,7 @@ export default function AuthForm() {
       }
 
       router.push("/todo");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Google sign-in error:", error);
       setErrorMsg("Google sign-in failed. Please try again.");
     } finally {
@@ -202,14 +207,14 @@ export default function AuthForm() {
           {mode === "signup" ? (
             <>
               Already have an account?{" "}
-              <button onClick={() => {setMode("signin"); setErrorMsg("");}} className="text-indigo-600 dark:text-indigo-400 hover:underline">
+              <button onClick={() => { setMode("signin"); setErrorMsg(""); }} className="text-indigo-600 dark:text-indigo-400 hover:underline">
                 Sign in
               </button>
             </>
           ) : (
             <>
-              Don't have an account?{" "}
-              <button onClick={() => {setMode("signup"); setErrorMsg("");}} className="text-indigo-600 dark:text-indigo-400 hover:underline">
+              Don&apos;t have an account?{" "}
+              <button onClick={() => { setMode("signup"); setErrorMsg(""); }} className="text-indigo-600 dark:text-indigo-400 hover:underline">
                 Sign up
               </button>
             </>

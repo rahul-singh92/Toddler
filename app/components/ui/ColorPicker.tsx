@@ -24,7 +24,6 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
   
   const containerRef = useRef<HTMLDivElement>(null);
   const wheelRef = useRef<HTMLCanvasElement>(null);
-  const dragging = useRef(false);
 
   // Close picker when clicking outside
   useEffect(() => {
@@ -101,7 +100,6 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
       const saturation = Math.min(distance / (radius * 0.8), 1) * 100;
       const lightness = 50;
       
-      const hslColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
       const hexColor = hslToHex(hue, saturation, lightness);
       
       setWheelPosition({ x: (x / canvas.width) * 100, y: (y / canvas.height) * 100 });

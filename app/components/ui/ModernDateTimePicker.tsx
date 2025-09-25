@@ -92,7 +92,7 @@ const ModernDateTimePicker: React.FC<ModernDateTimePickerProps> = ({
           setSelectedMinute(parsed.minute);
           setSelectedPeriod(parsed.period);
         }
-      } catch (error) {
+      } catch {
         // Use defaults
         setSelectedHour(9);
         setSelectedMinute(0);

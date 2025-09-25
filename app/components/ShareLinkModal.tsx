@@ -377,10 +377,10 @@ export default function ShareLinkModal({
                   <div className="bg-blue-50 rounded-lg p-4">
                     <h4 className="text-sm font-medium text-blue-900 mb-2 flex items-center">
                       <IconUsers size={14} className="mr-2" />
-                      What's shared:
+                      What&apos;s shared:
                     </h4>
                     <p className="text-sm text-blue-700">
-                      {selectedCount} todo{selectedCount !== 1 ? 's' : ''} will be copied to collaborators' accounts when they accept the invitation
+                      {selectedCount} todo{selectedCount !== 1 ? 's' : ''} will be copied to collaborators&apos; accounts when they accept the invitation
                     </p>
                   </div>
 
@@ -389,8 +389,8 @@ export default function ShareLinkModal({
                     <h4 className="text-sm font-medium text-amber-900 mb-2">Next steps:</h4>
                     <ul className="text-sm text-amber-700 space-y-1">
                       <li>• Share the link with people you want to collaborate with</li>
-                      <li>• They'll see an invitation page to accept</li>
-                      <li>• Accepted todos will appear in their account with "Collaborate" badges</li>
+                      <li>• They&apos;ll see an invitation page to accept</li>
+                      <li>• Accepted todos will appear in their account with &quot;Collaborate&quot; badges</li>
                       <li>• Link expires in 30 days</li>
                     </ul>
                   </div>

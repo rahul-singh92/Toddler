@@ -84,7 +84,7 @@ export interface CollaborationEvent {
     photoURL: string;
   };
   timestamp: Date;
-  data?: any; // Additional event-specific data
+  data?: Record<string, unknown>; // Additional event-specific data
 }
 
 // Helper type for collaboration context
