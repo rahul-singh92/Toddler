@@ -47,6 +47,9 @@ function HeaderBar({
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [shareModalType, setShareModalType] = useState<'selected' | 'all'>('selected');
 
+  // Ref for the share button to position dropdown
+  const shareButtonRef = useRef<HTMLButtonElement>(null);
+
   // Toggle dropdown on click
   const handleShareClick = () => {
     setIsShareDropdownVisible(!isShareDropdownVisible);
@@ -101,6 +104,7 @@ function HeaderBar({
           {/* Share Button with Click Toggle */}
           <div className="relative">
             <button
+            ref={shareButtonRef}
               onClick={handleShareClick}
               className={`px-4 py-2 rounded-md text-white text-sm font-medium transition-colors ${isShareDropdownVisible
                 ? 'bg-gray-800'
@@ -114,6 +118,7 @@ function HeaderBar({
               isVisible={isShareDropdownVisible}
               onClose={handleDropdownClose}
               onCreateShare={handleCreateShare}
+              triggerRef={shareButtonRef as React.RefObject<HTMLElement>}
             />
           </div>
         </div>

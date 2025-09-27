@@ -4,19 +4,41 @@ import { motion, AnimatePresence } from "framer-motion";
 import { IconSearch, IconUsers, IconPlus, IconLink, IconMail } from "@tabler/icons-react";
 import { useClickOutside } from "../hooks/useClickOutside";
 import Image from "next/image";
+import { createPortal } from 'react-dom';
+import { useEffect, useState } from 'react';
 
 interface ShareDropdownProps {
   isVisible: boolean;
   onClose: () => void;
   onCreateShare: () => void;
+  triggerRef?: React.RefObject<HTMLElement | HTMLButtonElement>;
 }
 
 export default function ShareDropdown({ 
   isVisible, 
   onClose, 
-  onCreateShare
+  onCreateShare,
+  triggerRef
 }: ShareDropdownProps) {
   const dropdownRef = useClickOutside<HTMLDivElement>(onClose);
+  const [mounted, setMounted] = useState(false);
+  const [position, setPosition] = useState({ top: 0, right: 0 });
+
+  // Mount portal only on client side
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Calculate position relative to trigger element
+  useEffect(() => {
+    if (isVisible && triggerRef?.current && mounted) {
+      const triggerRect = triggerRef.current.getBoundingClientRect();
+      setPosition({
+        top: triggerRect.bottom + window.scrollY + 8, // 8px gap
+        right: window.innerWidth - triggerRect.right + window.scrollX
+      });
+    }
+  }, [isVisible, triggerRef, mounted]);
 
   // Generate DiceBear avatars with different seeds for demo purposes
   const avatarSeeds = ["alex", "jordan", "sam", "casey", "taylor"];
@@ -39,7 +61,7 @@ export default function ShareDropdown({
     // Future: Open email composition
   };
 
-  return (
+  const dropdownContent = (
     <AnimatePresence>
       {isVisible && (
         <motion.div
@@ -54,7 +76,11 @@ export default function ShareDropdown({
             stiffness: 300,
             damping: 30
           }}
-          className="absolute top-full right-0 mt-2 z-50"
+          className="fixed z-[9999]" // Use fixed positioning with very high z-index
+          style={{
+            top: `${position.top}px`,
+            right: `${position.right}px`
+          }}
         >
           {/* Dropdown Arrow */}
           <div className="absolute -top-1 right-6 w-2 h-2 bg-white border-l border-t border-gray-200 rotate-45 z-10"></div>
@@ -187,4 +213,11 @@ export default function ShareDropdown({
       )}
     </AnimatePresence>
   );
+
+  // Render portal only on client side
+  if (!mounted) {
+    return null;
+  }
+
+  return createPortal(dropdownContent, document.body);
 }
