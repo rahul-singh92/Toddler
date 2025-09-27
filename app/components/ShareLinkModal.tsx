@@ -255,7 +255,7 @@ export default function ShareLinkModal({
                         <input
                           type="checkbox"
                           checked={item.selected}
-                          onChange={() => handleItemToggle(item.id)}
+                          readOnly
                           className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                         />
                         <div className="flex-1 min-w-0">
