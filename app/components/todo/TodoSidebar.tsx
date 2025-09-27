@@ -329,7 +329,7 @@ export default function TodoSidebar({
         alert(`Failed to uncomplete todo: ${errorMessage}`);
       }
     }
-  };  
+  };
 
   // Handle checkbox click separately from todo click
   const handleCheckboxClick = (todo: Todo, event: React.ChangeEvent<HTMLInputElement>) => {
@@ -559,11 +559,44 @@ export default function TodoSidebar({
                         </div>
 
                         <div className="flex-shrink-0 ml-2">
-                          {collapsed[group.key] ? (
-                            <IconPlus size={16} className="text-[#6A6A6A]" />
-                          ) : (
-                            <IconMinus size={16} className="text-[#6A6A6A]" />
-                          )}
+                          <motion.div
+                            className="relative w-4 h-4 flex items-center justify-center"
+                            animate={{
+                              rotate: collapsed[group.key] ? 0 : 180,
+                              scale: collapsed[group.key] ? 1 : 1.1
+                            }}
+                            transition={{
+                              duration: 0.5,
+                              ease: "easeInOut",
+                              type: "spring",
+                              stiffness: 150,
+                              damping: 15
+                            }}
+                          >
+                            <AnimatePresence mode="wait">
+                              {collapsed[group.key] ? (
+                                <motion.div
+                                  key="plus"
+                                  initial={{ opacity: 0, scale: 0.5 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0, scale: 0.5 }}
+                                  transition={{ duration: 0.2 }}
+                                >
+                                  <IconPlus size={16} className="text-[#6A6A6A]" />
+                                </motion.div>
+                              ) : (
+                                <motion.div
+                                  key="minus"
+                                  initial={{ opacity: 0, scale: 0.5 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0, scale: 0.5 }}
+                                  transition={{ duration: 0.2 }}
+                                >
+                                  <IconMinus size={16} className="text-[#6A6A6A]" />
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </motion.div>
                         </div>
                       </button>
 
