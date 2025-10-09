@@ -24,7 +24,7 @@ function DateBadge() {
       <span className="text-2xl mt-0.5">{date}</span>
     </div>
   );
-}
+} 
 
 type LeftSidebarProps = {
   onToggleSidebar?: () => void;
