@@ -6,6 +6,26 @@ It combines powerful task management features with a visually engaging UI and re
 🔗 **Live App:** https://toddler-three.vercel.app
 
 ---
+## 📸 Screenshots
+
+### 🔐 Login Page
+![Login Page](./screenshots/login.png)
+
+---
+
+### ➕ Create Todo
+![Create Todo](./screenshots/create-todo.png)
+
+---
+
+### 👀 Todo View
+![Todo View](./screenshots/todo-view.png)
+
+---
+
+### 🤝 Share / Create Todo Link
+![Share Todo](./screenshots/share-todo.png)
+
 
 ## Features
 
